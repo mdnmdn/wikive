@@ -2,14 +2,27 @@ const AssetManager = {
   template: `
     <div class="asset-manager">
       <div class="flex items-center justify-between mb-4">
-        <h1 class="text-2xl font-bold text-slate-900">Assets</h1>
+        <h1 class="text-2xl font-bold" style="color: hsl(var(--foreground))">Assets</h1>
         <div class="flex items-center gap-2">
-          <label class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:bg-slate-50 transition-colors cursor-pointer" style="border-color: hsl(var(--border))">
+          <input
+            v-model="searchQuery"
+            @input="onSearchInput"
+            type="text"
+            placeholder="Search assets..."
+            class="px-3 py-1.5 text-sm rounded-md border focus:outline-none focus:ring-2 focus:ring-primary"
+            style="border-color: hsl(var(--border)); background-color: hsl(var(--background)); color: hsl(var(--foreground))"
+          />
+          <button @click="refreshAssets" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))" title="Refresh assets">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+          </button>
+          <label class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors cursor-pointer" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
             Upload
             <input type="file" multiple class="hidden" @change="onFileInput" ref="fileInput" />
           </label>
-          <button @click="createSubfolder" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:bg-slate-50 transition-colors" style="border-color: hsl(var(--border))" title="New subfolder">
+          <button @click="createSubfolder" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))" title="New subfolder">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
           </button>
         </div>
@@ -48,12 +61,15 @@ const AssetManager = {
       <div v-if="loading" class="flex justify-center py-8">
         <div class="spinner"></div>
       </div>
-      <div v-else-if="items.length === 0" class="text-center py-8 text-slate-400">
+      <div v-else-if="items.length === 0" class="text-center py-8" style="color: hsl(var(--muted-foreground))">
         No assets yet. Upload files to get started.
+      </div>
+      <div v-else-if="filteredItems.length === 0" class="text-center py-8" style="color: hsl(var(--muted-foreground))">
+        No assets match your search.
       </div>
       <div v-else class="asset-grid">
         <div
-          v-for="item in items"
+          v-for="item in filteredItems"
           :key="item.id"
           class="asset-card"
           :class="{ 'asset-card-folder': item.isFolder }"
@@ -214,12 +230,21 @@ const AssetManager = {
       renaming: null,
       renameValue: '',
       deleting: null,
+      searchQuery: '',
+      searchTimeout: null,
     };
   },
   computed: {
     renderedPreviewMd() {
       if (!this.previewText) return '';
       return marked.parse(this.previewText);
+    },
+    filteredItems() {
+      if (!this.searchQuery.trim()) return this.items;
+      const query = this.searchQuery.toLowerCase();
+      return this.items.filter(item =>
+        item.name.toLowerCase().includes(query)
+      );
     },
   },
   watch: {
@@ -524,6 +549,19 @@ const AssetManager = {
       } catch (e) {
         this.$emit('toast', 'Delete failed: ' + e.message, 'error');
       }
+    },
+
+    // Search with debounce
+    onSearchInput() {
+      // Debounce is handled by Vue reactivity - filtering is instant
+      // This method exists for future enhancements like backend search
+    },
+
+    // Refresh assets
+    async refreshAssets() {
+      CacheService.remove('listing:' + this.currentFolderId);
+      await this.loadItems();
+      this.$emit('toast', 'Assets refreshed', 'success');
     },
   },
 };

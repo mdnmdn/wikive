@@ -94,6 +94,35 @@ html, body, #app {
   background: hsl(var(--muted)) !important;
 }
 
+/* Dark mode overrides */
+.dark .toastui-editor-defaultUI {
+  background: hsl(var(--background)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.dark .toastui-editor-defaultUI .toastui-editor-md-tab-container {
+  background: hsl(var(--muted)) !important;
+}
+
+.dark .toastui-editor-defaultUI .CodeMirror {
+  background: hsl(var(--background)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.dark .toastui-editor-preview {
+  background: hsl(var(--background)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.dark .toastui-editor-md-preview {
+  background: hsl(var(--background)) !important;
+}
+
+.dark .toastui-editor-defaultUI .toastui-editor-toolbar {
+  background: hsl(var(--muted)) !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+}
+
 /* Loading spinner */
 .spinner {
   width: 1.5rem;

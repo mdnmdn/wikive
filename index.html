@@ -1,100 +1,150 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Google Wiki</title>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Simple Wiki</title>
+        <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        <link rel="manifest" href="/site.webmanifest" />
+        <!-- Tailwind CSS with shadcn-style config -->
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+            tailwind.config = {
+                darkMode: "class",
+                theme: {
+                    extend: {
+                        colors: {
+                            border: "hsl(var(--border))",
+                            ring: "hsl(var(--ring))",
+                            background: "hsl(var(--background))",
+                            foreground: "hsl(var(--foreground))",
+                            primary: {
+                                DEFAULT: "hsl(var(--primary))",
+                                foreground: "hsl(var(--primary-foreground))",
+                            },
+                            secondary: {
+                                DEFAULT: "hsl(var(--secondary))",
+                                foreground: "hsl(var(--secondary-foreground))",
+                            },
+                            destructive: {
+                                DEFAULT: "hsl(var(--destructive))",
+                                foreground:
+                                    "hsl(var(--destructive-foreground))",
+                            },
+                            muted: {
+                                DEFAULT: "hsl(var(--muted))",
+                                foreground: "hsl(var(--muted-foreground))",
+                            },
+                            accent: {
+                                DEFAULT: "hsl(var(--accent))",
+                                foreground: "hsl(var(--accent-foreground))",
+                            },
+                        },
+                    },
+                },
+            };
+        </script>
+        <style>
+            :root {
+                --background: 0 0% 100%;
+                --foreground: 240 10% 3.9%;
+                --muted: 260 30% 96%;
+                --muted-foreground: 260 8% 45%;
+                --accent: 260 20% 92%;
+                --accent-foreground: 268 90% 45%;
+                --primary: 268 90% 50%;
+                --primary-foreground: 0 0% 100%;
+                --secondary: 260 20% 92%;
+                --secondary-foreground: 268 90% 45%;
+                --destructive: 0 84.2% 60.2%;
+                --destructive-foreground: 0 0% 98%;
+                --border: 260 25% 88%;
+                --ring: 268 90% 50%;
+            }
 
-  <!-- Tailwind CSS with shadcn-style config -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            border: 'hsl(var(--border))',
-            ring: 'hsl(var(--ring))',
-            background: 'hsl(var(--background))',
-            foreground: 'hsl(var(--foreground))',
-            primary: { DEFAULT: 'hsl(var(--primary))', foreground: 'hsl(var(--primary-foreground))' },
-            secondary: { DEFAULT: 'hsl(var(--secondary))', foreground: 'hsl(var(--secondary-foreground))' },
-            destructive: { DEFAULT: 'hsl(var(--destructive))', foreground: 'hsl(var(--destructive-foreground))' },
-            muted: { DEFAULT: 'hsl(var(--muted))', foreground: 'hsl(var(--muted-foreground))' },
-            accent: { DEFAULT: 'hsl(var(--accent))', foreground: 'hsl(var(--accent-foreground))' },
-          },
-        },
-      },
-    };
-  </script>
-  <style>
-    :root {
-      --background: 0 0% 100%;
-      --foreground: 222.2 84% 4.9%;
-      --muted: 210 40% 96.1%;
-      --muted-foreground: 215.4 16.3% 46.9%;
-      --accent: 210 40% 96.1%;
-      --accent-foreground: 222.2 47.4% 11.2%;
-      --primary: 222.2 47.4% 11.2%;
-      --primary-foreground: 210 40% 98%;
-      --secondary: 210 40% 96.1%;
-      --secondary-foreground: 222.2 47.4% 11.2%;
-      --destructive: 0 84.2% 60.2%;
-      --destructive-foreground: 210 40% 98%;
-      --border: 214.3 31.8% 91.4%;
-      --ring: 222.2 84% 4.9%;
-    }
-  </style>
+            .dark {
+                --background: 240 13% 11%;
+                --foreground: 240 5% 96%;
+                --muted: 268 25% 22%;
+                --muted-foreground: 268 10% 65%;
+                --accent: 268 65% 35%;
+                --accent-foreground: 240 5% 96%;
+                --primary: 268 85% 58%;
+                --primary-foreground: 240 13% 11%;
+                --secondary: 268 65% 35%;
+                --secondary-foreground: 240 5% 96%;
+                --destructive: 0 72% 58%;
+                --destructive-foreground: 240 13% 11%;
+                --border: 268 25% 28%;
+                --ring: 268 85% 58%;
+            }
+        </style>
 
-  <!-- highlight.js -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+        <!-- highlight.js -->
+        <link
+            id="hljs-theme"
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"
+        />
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
-  <!-- Toast UI Editor -->
-  <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css" />
-  <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
+        <!-- Toast UI Editor -->
+        <link
+            rel="stylesheet"
+            href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css"
+        />
+        <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
 
-  <!-- App styles -->
-  <link rel="stylesheet" href="css/app.css" />
-</head>
-<body>
-  <div id="app"></div>
+        <!-- App styles -->
+        <link rel="stylesheet" href="css/app.css" />
+    </head>
+    <body>
+        <div id="app"></div>
 
-  <!-- Config -->
-  <script src="config.js"></script>
+        <!-- Config -->
+        <script src="config.js"></script>
 
-  <!-- Vue 3 -->
-  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+        <!-- Vue 3 -->
+        <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 
-  <!-- marked.js -->
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+        <!-- marked.js -->
+        <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
-  <!-- mermaid -->
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+        <!-- mermaid -->
+        <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 
-  <!-- Google Identity Services -->
-  <script>
-    window.googleReady = new Promise(resolve => {
-      window.onGoogleLibraryLoad = resolve;
-    });
-  </script>
-  <script src="https://accounts.google.com/gsi/client" onload="onGoogleLibraryLoad()" async defer></script>
+        <!-- Google Identity Services -->
+        <script>
+            window.googleReady = new Promise((resolve) => {
+                window.onGoogleLibraryLoad = resolve;
+            });
+        </script>
+        <script
+            src="https://accounts.google.com/gsi/client"
+            onload="onGoogleLibraryLoad()"
+            async
+            defer
+        ></script>
 
-  <!-- App services -->
-  <script src="js/services/cache.js"></script>
-  <script src="js/services/auth.js"></script>
-  <script src="js/services/drive.js"></script>
+        <!-- App services -->
+        <script src="js/services/cache.js"></script>
+        <script src="js/services/auth.js"></script>
+        <script src="js/services/drive.js"></script>
 
-  <!-- App components -->
-  <script src="js/components/LoginScreen.js"></script>
-  <script src="js/components/Breadcrumb.js"></script>
-  <script src="js/components/AppHeader.js"></script>
-  <script src="js/components/Sidebar.js"></script>
-  <script src="js/components/PageView.js"></script>
-  <script src="js/components/PageNotFound.js"></script>
-  <script src="js/components/PageEditor.js"></script>
-  <script src="js/components/AssetManager.js"></script>
+        <!-- App components -->
+        <script src="js/components/LoginScreen.js"></script>
+        <script src="js/components/Breadcrumb.js"></script>
+        <script src="js/components/AppHeader.js"></script>
+        <script src="js/components/Sidebar.js"></script>
+        <script src="js/components/PageView.js"></script>
+        <script src="js/components/PageNotFound.js"></script>
+        <script src="js/components/PageEditor.js"></script>
+        <script src="js/components/AssetManager.js"></script>
 
-  <!-- App init -->
-  <script src="js/app.js"></script>
-</body>
+        <!-- App init -->
+        <script src="js/app.js"></script>
+    </body>
 </html>

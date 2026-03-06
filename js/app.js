@@ -8,13 +8,16 @@ const app = Vue.createApp({
         :mode="mode"
         :user="user"
         :resolved="resolved"
+        :dark-mode="darkMode"
         @edit="startEdit"
         @save="save"
         @cancel="cancelEdit"
         @new-page="showNewPageDialog"
+        @toggle-dark="toggleDarkMode"
+        @refresh-page="refreshPage"
       ></app-header>
       <div class="app-body">
-        <sidebar :root-id="rootId" :current-path="currentPath" ref="sidebar"></sidebar>
+        <sidebar :root-id="rootId" :current-path="currentPath" :expand-path="pendingExpandPath" @refresh="refreshSidebar" ref="sidebar"></sidebar>
         <main class="main-content" :style="isAssetsRoute ? 'max-width: none' : ''">
           <template v-if="isAssetsRoute">
             <asset-manager
@@ -42,21 +45,40 @@ const app = Vue.createApp({
         {{ toast.message }}
       </div>
       <!-- New page dialog -->
-      <div v-if="showNewPage" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="showNewPage = false">
-        <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
+      <div v-if="showNewPage" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="!creatingPage && (showNewPage = false)">
+        <div class="bg-background text-foreground rounded-xl shadow-xl p-6 w-full max-w-md mx-4" style="background-color: hsl(var(--background)); color: hsl(var(--foreground))">
           <h3 class="text-lg font-semibold mb-4">Create New Page</h3>
           <input
             v-model="newPagePath"
-            @keyup.enter="createPage(newPagePath)"
-            class="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-            style="border-color: hsl(var(--border))"
+            @keyup.enter="!creatingPage && createPage(newPagePath)"
+            :disabled="creatingPage"
+            class="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+            style="border-color: hsl(var(--border)); color: hsl(var(--foreground)); background-color: hsl(var(--background))"
             placeholder="path/to/page-name"
             ref="newPageInput"
           />
-          <p class="text-xs text-slate-400 mt-2">Use / to create in subfolders. Folders are created automatically.</p>
+          <p class="text-xs mt-2" style="color: hsl(var(--muted-foreground))">Use / to create in subfolders. Folders are created automatically.</p>
           <div class="flex justify-end gap-2 mt-4">
-            <button @click="showNewPage = false" class="px-4 py-2 text-sm rounded-lg border hover:bg-slate-50" style="border-color: hsl(var(--border))">Cancel</button>
-            <button @click="createPage(newPagePath)" class="px-4 py-2 text-sm rounded-lg bg-slate-900 text-white hover:bg-slate-800">Create</button>
+            <button
+              @click="showNewPage = false"
+              :disabled="creatingPage"
+              class="px-4 py-2 text-sm rounded-lg border hover:opacity-80 disabled:opacity-50"
+              style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))"
+            >Cancel</button>
+            <button
+              @click="createPage(newPagePath)"
+              :disabled="creatingPage"
+              class="px-4 py-2 text-sm rounded-lg flex items-center gap-2 disabled:opacity-50"
+              style="background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground))"
+            >
+              <template v-if="creatingPage">
+                <div class="spinner" style="border-color: hsl(var(--primary-foreground) / 0.3); border-top-color: hsl(var(--primary-foreground)); width: 1rem; height: 1rem; border-width: 1px"></div>
+                <span>Creating…</span>
+              </template>
+              <template v-else>
+                <span>Create</span>
+              </template>
+            </button>
           </div>
         </div>
       </div>
@@ -74,11 +96,19 @@ const app = Vue.createApp({
       toast: null,
       showNewPage: false,
       newPagePath: '',
+      creatingPage: false,
       isAssetsRoute: false,
       assetsFolderId: null,
+      darkMode: false,
+      pendingExpandPath: null,
     };
   },
   async mounted() {
+    // Load dark mode preference
+    const savedDarkMode = localStorage.getItem('darkMode') === 'true';
+    this.darkMode = savedDarkMode;
+    this.applyDarkMode(savedDarkMode);
+
     // Init auth
     AuthService.init((loggedIn) => {
       this.authenticated = loggedIn;
@@ -167,8 +197,8 @@ const app = Vue.createApp({
 
     async createPage(path) {
       if (!path) return;
-      this.showNewPage = false;
 
+      this.creatingPage = true;
       try {
         const segments = path.split('/').filter(Boolean);
         const fileName = segments.pop() + '.md';
@@ -184,14 +214,18 @@ const app = Vue.createApp({
         await DriveService.createFile(fileName, parentId, initialContent);
 
         this.showToast('Page created', 'success');
+        this.showNewPage = false;
+        this.newPagePath = '';
 
         // Navigate to new page
         window.location.hash = '#/' + path;
 
-        // Refresh sidebar
-        this.refreshSidebar();
+        // Refresh sidebar with auto-expand
+        this.refreshSidebar(path);
       } catch (e) {
         this.showToast('Failed to create page: ' + e.message, 'error');
+      } finally {
+        this.creatingPage = false;
       }
     },
 
@@ -203,11 +237,48 @@ const app = Vue.createApp({
       });
     },
 
-    refreshSidebar() {
+    refreshSidebar(expandPath = null) {
       // Force sidebar re-render by toggling rootId
+      this.pendingExpandPath = expandPath;
       const id = this.rootId;
       this.rootId = null;
       this.$nextTick(() => { this.rootId = id; });
+    },
+
+    toggleDarkMode() {
+      this.darkMode = !this.darkMode;
+      this.applyDarkMode(this.darkMode);
+      localStorage.setItem('darkMode', this.darkMode.toString());
+    },
+
+    applyDarkMode(isDark) {
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+        const hljsTheme = document.getElementById('hljs-theme');
+        if (hljsTheme) {
+          hljsTheme.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css';
+        }
+        if (typeof mermaid !== 'undefined') {
+          mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+        }
+      } else {
+        document.documentElement.classList.remove('dark');
+        const hljsTheme = document.getElementById('hljs-theme');
+        if (hljsTheme) {
+          hljsTheme.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css';
+        }
+        if (typeof mermaid !== 'undefined') {
+          mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
+        }
+      }
+    },
+
+    refreshPage() {
+      if (this.resolved && this.resolved.type === 'file') {
+        CacheService.remove('content:' + this.resolved.id);
+        CacheService.remove('path:' + this.currentPath);
+      }
+      this.onRouteChange();
     },
 
     showToast(message, type = 'info') {
