@@ -38,22 +38,36 @@ const DriveService = {
       return cached;
     }
 
-    // Search for existing _wiki folder
-    const q = `name='${CONFIG.ROOT_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false`;
-    const res = await this._fetch(
-      `${CONFIG.DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,name)`
-    );
-    const data = await res.json();
+    // Handle hierarchical paths (e.g., "sefin-devops/_wiki")
+    const pathSegments = CONFIG.ROOT_FOLDER_NAME.split('/').filter(Boolean);
+    let currentParentId = 'root';
 
-    if (data.files && data.files.length > 0) {
-      this._rootId = data.files[0].id;
-    } else {
-      // Create root folder
-      this._rootId = await this._createFolder(CONFIG.ROOT_FOLDER_NAME, null);
-      // Create welcome page
-      await this.createFile('index.md', this._rootId, this._welcomeContent());
+    for (let i = 0; i < pathSegments.length; i++) {
+      const folderName = pathSegments[i];
+      const isLast = i === pathSegments.length - 1;
+
+      // Search for existing folder by name and parent
+      const q = `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${currentParentId}' in parents and trashed=false`;
+      const res = await this._fetch(
+        `${CONFIG.DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,name)`
+      );
+      const data = await res.json();
+
+      if (data.files && data.files.length > 0) {
+        currentParentId = data.files[0].id;
+      } else {
+        // Folder not found, create it
+        const parentIdToCreate = currentParentId === 'root' ? null : currentParentId;
+        currentParentId = await this._createFolder(folderName, parentIdToCreate);
+
+        // If this is the last folder in the path and it's newly created, create welcome page
+        if (isLast) {
+          await this.createFile('index.md', currentParentId, this._welcomeContent());
+        }
+      }
     }
 
+    this._rootId = currentParentId;
     CacheService.set('root_id', this._rootId);
     return this._rootId;
   },

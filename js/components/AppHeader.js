@@ -3,7 +3,7 @@ const AppHeader = {
     <header class="flex items-center justify-between px-4 py-2 border-b" style="border-color: hsl(var(--border)); background-color: hsl(var(--background)); color: hsl(var(--foreground))">
       <div class="flex items-center gap-3">
         <a href="#/" class="flex items-center gap-2 hover:opacity-80" style="color: hsl(var(--foreground))">
-          <img src="/assets/logo-base.jpg" alt="Wiki Logo" class="h-8 w-auto rounded" />
+          <img src="/assets/logo-base.png" alt="Wiki Logo" class="h-8 w-auto rounded" />
         </a>
         <breadcrumb :path="currentPath"></breadcrumb>
       </div>

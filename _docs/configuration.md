@@ -25,9 +25,15 @@ Format: `<numbers>-<hash>.apps.googleusercontent.com`
 
 Default: `_wiki`
 
-The name of the root folder created in the user's Google Drive. Change this to use a different folder name. The folder is created in the Drive root on first login.
+The name or hierarchical path of the root folder in the user's Google Drive.
 
-If you change this after the app has been used, a new folder will be created and the old one will remain in Drive (but won't be used by the app anymore).
+- **Single level**: `_wiki` → creates/uses `_wiki` in the Drive root.
+- **Hierarchical**: `sefin-devops/_wiki` → creates `sefin-devops`, then `_wiki` inside it.
+- **Deeply nested**: `test1/test2/_wiki` → creates the full nested hierarchy automatically.
+
+The app will search for existing folders at each level and create any missing levels. Note that due to the `drive.file` scope, the app may only see folders it previously created. If you manually create folders in the Drive UI, the app may create duplicates if it lacks permission to see the existing ones.
+
+If you change this after the app has been used, a new folder hierarchy will be created and the old one will remain in Drive (but won't be used by the app anymore).
 
 ### CACHE_TTL
 
