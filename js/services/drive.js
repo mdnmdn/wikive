@@ -341,6 +341,95 @@ const DriveService = {
     return id;
   },
 
+  async getSnippetsFolderId() {
+    const rootId = await this.getRootFolderId();
+    const children = await this.listFolder(rootId);
+    const existing = children.find(f => f.isFolder && f.name === '_snippets');
+    if (existing) return existing.id;
+
+    const id = await this._createFolder('_snippets', rootId);
+    CacheService.remove('listing:' + rootId);
+    return id;
+  },
+
+  async listSnippets(folderId) {
+    const q = `'${folderId}' in parents and trashed=false`;
+    const fields = 'files(id,name,mimeType,modifiedTime,appProperties,createdTime)';
+    const res = await this._fetch(
+      `${CONFIG.DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=${fields}&orderBy=createdTime desc`
+    );
+    const data = await res.json();
+    return (data.files || []).map(f => ({
+      id: f.id,
+      name: f.name,
+      modifiedTime: f.modifiedTime,
+      createdTime: f.createdTime,
+      type: f.appProperties?.type || 'markdown',
+      expiryTs: f.appProperties?.expiryTs ? parseInt(f.appProperties.expiryTs) : null,
+      duration: f.appProperties?.duration ? parseInt(f.appProperties.duration) : 0,
+    }));
+  },
+
+  async createSnippet(name, content, type, expiryTs, duration) {
+    const folderId = await this.getSnippetsFolderId();
+    const metadata = {
+      name: name || 'Untitled Snippet',
+      parents: [folderId],
+      appProperties: {
+        type: type || 'markdown',
+        expiryTs: expiryTs ? expiryTs.toString() : '0',
+        duration: duration ? duration.toString() : '0',
+      }
+    };
+
+    const boundary = 'wiki_boundary_' + Date.now();
+    const body = [
+      `--${boundary}`,
+      'Content-Type: application/json; charset=UTF-8',
+      '',
+      JSON.stringify(metadata),
+      `--${boundary}`,
+      'Content-Type: text/plain',
+      '',
+      content,
+      `--${boundary}--`,
+    ].join('\r\n');
+
+    const res = await this._fetch(`${CONFIG.DRIVE_UPLOAD_API}/files?uploadType=multipart`, {
+      method: 'POST',
+      headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+      body,
+    });
+    return await res.json();
+  },
+
+  async updateSnippet(fileId, name, content, type, expiryTs, duration) {
+    const metadata = {
+      name,
+      appProperties: {
+        type,
+        expiryTs: expiryTs ? expiryTs.toString() : '0',
+        duration: duration ? duration.toString() : '0',
+      }
+    };
+
+    // Update metadata
+    await this._fetch(`${CONFIG.DRIVE_API}/files/${fileId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(metadata),
+    });
+
+    // Update content
+    await this._fetch(`${CONFIG.DRIVE_UPLOAD_API}/files/${fileId}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'text/plain' },
+      body: content,
+    });
+
+    CacheService.remove('content:' + fileId);
+  },
+
   async getFileMetadata(fileId) {
     const res = await this._fetch(
       `${CONFIG.DRIVE_API}/files/${fileId}?fields=id,name,mimeType,size,modifiedTime`

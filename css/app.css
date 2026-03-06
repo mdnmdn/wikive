@@ -296,3 +296,58 @@ html, body, #app {
 .asset-wiki-path:hover {
   color: hsl(var(--foreground));
 }
+
+/* Snippet Manager */
+.snippet-manager {
+  display: flex;
+  height: calc(100vh - 4.5rem); /* Header height approx 4.5rem */
+  margin: -2rem -3rem;
+  overflow: hidden;
+}
+
+.snippet-list-sidebar {
+  width: 300px;
+  min-width: 300px;
+  border-right: 1px solid hsl(var(--border));
+  display: flex;
+  flex-direction: column;
+  background: hsl(var(--background));
+}
+
+.snippet-content-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: hsl(var(--background));
+}
+
+.snippet-item {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid hsl(var(--border));
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.snippet-item:hover {
+  background: hsl(var(--muted) / 0.5);
+}
+
+.snippet-item.active {
+  background: hsl(var(--accent));
+}
+
+.ace_editor {
+  flex: 1;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.snippet-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: hsl(var(--muted-foreground));
+}

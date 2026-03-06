@@ -18,12 +18,18 @@ const app = Vue.createApp({
       ></app-header>
       <div class="app-body">
         <sidebar :root-id="rootId" :current-path="currentPath" :expand-path="pendingExpandPath" @refresh="refreshSidebar" ref="sidebar"></sidebar>
-        <main class="main-content" :style="isAssetsRoute ? 'max-width: none' : ''">
+        <main class="main-content" :style="(isAssetsRoute || isSnippetsRoute) ? 'max-width: none' : ''">
           <template v-if="isAssetsRoute">
             <asset-manager
               :assets-folder-id="assetsFolderId"
               @toast="showToast"
             ></asset-manager>
+          </template>
+          <template v-else-if="isSnippetsRoute">
+            <snippet-manager
+              :snippets-folder-id="snippetsFolderId"
+              @toast="showToast"
+            ></snippet-manager>
           </template>
           <template v-else-if="mode === 'edit'">
             <page-editor
@@ -99,6 +105,8 @@ const app = Vue.createApp({
       creatingPage: false,
       isAssetsRoute: false,
       assetsFolderId: null,
+      isSnippetsRoute: false,
+      snippetsFolderId: null,
       darkMode: false,
       pendingExpandPath: null,
     };
@@ -144,6 +152,7 @@ const app = Vue.createApp({
       // Check if navigating to assets
       if (this.currentPath === '_assets' || this.currentPath.startsWith('_assets/')) {
         this.isAssetsRoute = true;
+        this.isSnippetsRoute = false;
         this.resolved = null;
         try {
           this.assetsFolderId = await DriveService.getAssetsFolderId();
@@ -153,8 +162,23 @@ const app = Vue.createApp({
         return;
       }
 
+      // Check if navigating to snippets
+      if (this.currentPath === '_snippets' || this.currentPath.startsWith('_snippets/')) {
+        this.isSnippetsRoute = true;
+        this.isAssetsRoute = false;
+        this.resolved = null;
+        try {
+          this.snippetsFolderId = await DriveService.getSnippetsFolderId();
+        } catch (e) {
+          this.showToast('Failed to load snippets: ' + e.message, 'error');
+        }
+        return;
+      }
+
       this.isAssetsRoute = false;
+      this.isSnippetsRoute = false;
       this.assetsFolderId = null;
+      this.snippetsFolderId = null;
 
       try {
         this.resolved = await DriveService.resolvePath(this.currentPath);
@@ -298,6 +322,7 @@ app.component('page-view', PageView);
 app.component('page-not-found', PageNotFound);
 app.component('page-editor', PageEditor);
 app.component('asset-manager', AssetManager);
+app.component('snippet-manager', SnippetManager);
 
 // Mount
 app.mount('#app');

@@ -86,8 +86,8 @@ const SidebarTree = {
       this.loading = true;
       try {
         const all = await DriveService.listFolder(this.folderId);
-        // Hide _assets folder from root tree (it has its own sidebar link)
-        let items = this.basePath === '' ? all.filter(f => f.name !== '_assets') : all;
+        // Hide _assets and _snippets folders from root tree (they have their own sidebar links)
+        let items = this.basePath === '' ? all.filter(f => f.name !== '_assets' && f.name !== '_snippets') : all;
 
         // Deduplicate: if both a folder and a file with the same name exist, keep only the folder
         const deduped = {};
@@ -180,6 +180,22 @@ const Sidebar = {
         <div class="spinner"></div>
       </div>
       <div class="border-t mx-3 my-2" style="border-color: hsl(var(--border))"></div>
+      <a
+        href="#/_snippets"
+        class="tree-item"
+        :class="{ active: currentPath === '_snippets' || currentPath.startsWith('_snippets/') }"
+      >
+        <svg
+          class="icon"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          style="width: 1.25rem; height: 1.25rem; flex-shrink: 0"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+        </svg>
+        <span>Snippets</span>
+      </a>
       <a
         href="#/_assets"
         class="tree-item"
