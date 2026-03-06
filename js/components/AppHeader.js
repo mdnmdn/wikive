@@ -5,7 +5,7 @@ const AppHeader = {
         <a href="#/" class="flex items-center gap-2 hover:opacity-80" style="color: hsl(var(--foreground))">
           <img src="/assets/logo-base.png" alt="Wiki Logo" class="h-8 w-auto rounded" />
         </a>
-        <breadcrumb :path="currentPath"></breadcrumb>
+        <breadcrumb :path="currentPath" :snippet-name="snippetName"></breadcrumb>
       </div>
       <div class="flex items-center gap-2">
         <template v-if="mode === 'view' && resolved && resolved.type === 'file'">
@@ -50,7 +50,7 @@ const AppHeader = {
       </div>
     </header>
   `,
-  props: ['currentPath', 'mode', 'user', 'resolved', 'darkMode', 'isSnippetsRoute'],
+  props: ['currentPath', 'mode', 'user', 'resolved', 'darkMode', 'isSnippetsRoute', 'snippetName'],
   emits: ['edit', 'save', 'cancel', 'new-page', 'new-snippet', 'delete-page', 'toggle-dark', 'refresh-page'],
   methods: {
     logout() {

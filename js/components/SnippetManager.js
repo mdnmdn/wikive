@@ -101,7 +101,7 @@ const SnippetManager = {
     </div>
   `,
   props: ['snippetsFolderId', 'snippetId'],
-  emits: ['toast', 'refresh-snippets'],
+  emits: ['toast', 'refresh-snippets', 'snippet-selected'],
   data() {
     return {
       selectedSnippet: null,
@@ -146,6 +146,7 @@ const SnippetManager = {
             duration: meta.appProperties?.duration ? parseInt(meta.appProperties.duration) : 0,
             expiryTs: meta.appProperties?.expiryTs ? parseInt(meta.appProperties.expiryTs) : 0
         };
+        this.$emit('snippet-selected', this.selectedSnippet);
         this.editName = this.selectedSnippet.name;
         this.editType = this.selectedSnippet.type;
         this.editExpiry = this.selectedSnippet.duration;
@@ -213,6 +214,7 @@ const SnippetManager = {
             duration,
             expiryTs
           };
+          this.$emit('snippet-selected', this.selectedSnippet);
           this.isReadMode = true;
           this.editor.setReadOnly(true);
           this.$emit('refresh-snippets');
@@ -228,6 +230,7 @@ const SnippetManager = {
             duration,
             expiryTs
           };
+          this.$emit('snippet-selected', this.selectedSnippet);
           this.$nextTick(async () => {
             this.ensureEditor();
             this.editor.setValue(content || '', -1);

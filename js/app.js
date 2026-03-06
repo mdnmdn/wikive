@@ -10,6 +10,7 @@ const app = Vue.createApp({
         :resolved="resolved"
         :dark-mode="darkMode"
         :is-snippets-route="isSnippetsRoute"
+        :snippet-name="selectedSnippetName"
         @edit="startEdit"
         @save="save"
         @cancel="cancelEdit"
@@ -25,14 +26,18 @@ const app = Vue.createApp({
           :current-path="currentPath"
           :expand-path="pendingExpandPath"
           :snippets-version="snippetListVersion"
+          :assets-folder-id="assetsFolderId"
           :is-collapsed="sidebarCollapsed"
           @refresh="refreshSidebar"
           @toggle-collapse="sidebarCollapsed = !sidebarCollapsed"
+          @toast="showToast"
+          @assets-uploaded="refreshAssetsFromSidebar"
           ref="sidebar"
         ></sidebar>
         <main class="main-content" :class="{ 'sidebar-collapsed': sidebarCollapsed, 'snippets-full': isSnippetsRoute, 'wiki-edit-full': mode === 'edit' }" :style="(isAssetsRoute || isSnippetsRoute || mode === 'edit') ? 'max-width: none' : ''">
           <template v-if="isAssetsRoute">
             <asset-manager
+              ref="assetManager"
               :assets-folder-id="assetsFolderId"
               @toast="showToast"
             ></asset-manager>
@@ -44,6 +49,7 @@ const app = Vue.createApp({
               :snippet-id="selectedSnippetId"
               @toast="showToast"
               @refresh-snippets="refreshSnippets"
+              @snippet-selected="onSnippetSelected"
             ></snippet-manager>
           </template>
           <template v-else-if="mode === 'edit'">
@@ -123,6 +129,7 @@ const app = Vue.createApp({
       isSnippetsRoute: false,
       snippetsFolderId: null,
       selectedSnippetId: null,
+      selectedSnippetName: '',
       snippetListVersion: 0,
       pendingNewSnippet: false,
       sidebarCollapsed: false,
@@ -191,6 +198,7 @@ const app = Vue.createApp({
         // Extract snippet ID if present
         const segments = this.currentPath.split('/');
         this.selectedSnippetId = segments.length > 1 ? segments[1] : null;
+        this.selectedSnippetName = '';
 
         try {
           this.snippetsFolderId = await DriveService.getSnippetsFolderId();
@@ -209,6 +217,7 @@ const app = Vue.createApp({
       this.assetsFolderId = null;
       this.snippetsFolderId = null;
       this.selectedSnippetId = null;
+      this.selectedSnippetName = '';
 
       try {
         this.resolved = await DriveService.resolvePath(this.currentPath);
@@ -307,8 +316,18 @@ const app = Vue.createApp({
       this.refreshSnippets();
     },
 
+    refreshAssetsFromSidebar() {
+      if (this.isAssetsRoute) {
+        this.$nextTick(() => this.$refs.assetManager?.loadItems());
+      }
+    },
+
     refreshSnippets() {
       this.snippetListVersion += 1;
+    },
+
+    onSnippetSelected(snippet) {
+      this.selectedSnippetName = snippet?.name || '';
     },
 
     createSnippetFromHeader() {

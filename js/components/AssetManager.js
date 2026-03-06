@@ -1,8 +1,17 @@
 const AssetManager = {
   template: `
     <div class="asset-manager">
-      <div class="flex items-center justify-between mb-4">
-        <h1 class="text-2xl font-bold" style="color: hsl(var(--foreground))">Assets</h1>
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <h1 class="text-2xl font-bold" style="color: hsl(var(--foreground))">Assets</h1>
+          <nav class="flex items-center gap-1 text-sm text-slate-500 mt-1" v-if="folderStack.length > 0">
+            <a href="#" @click.prevent="navigateToRoot" class="hover:text-slate-800">_assets</a>
+            <template v-for="(f, i) in folderStack" :key="f.id">
+              <span class="text-slate-300">/</span>
+              <a href="#" @click.prevent="navigateToFolder(i)" class="hover:text-slate-800">{{ f.name }}</a>
+            </template>
+          </nav>
+        </div>
         <div class="flex items-center gap-2">
           <input
             v-model="searchQuery"
@@ -25,35 +34,6 @@ const AssetManager = {
           <button @click="createSubfolder" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))" title="New subfolder">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
           </button>
-        </div>
-      </div>
-
-      <!-- Breadcrumb for assets subfolders -->
-      <nav class="flex items-center gap-1 text-sm text-slate-500 mb-4" v-if="folderStack.length > 0">
-        <a href="#" @click.prevent="navigateToRoot" class="hover:text-slate-800">_assets</a>
-        <template v-for="(f, i) in folderStack" :key="f.id">
-          <span class="text-slate-300">/</span>
-          <a href="#" @click.prevent="navigateToFolder(i)" class="hover:text-slate-800">{{ f.name }}</a>
-        </template>
-      </nav>
-
-      <!-- Drop zone -->
-      <div
-        class="drop-zone"
-        :class="{ 'drop-zone-active': dragging }"
-        @dragover.prevent="dragging = true"
-        @dragleave.prevent="dragging = false"
-        @drop.prevent="onDrop"
-        @paste="onPaste"
-        tabindex="0"
-      >
-        <div v-if="uploading" class="flex flex-col items-center gap-2">
-          <div class="spinner"></div>
-          <span class="text-sm text-slate-500">Uploading {{ uploadCount }} file(s)...</span>
-        </div>
-        <div v-else class="flex flex-col items-center gap-2 pointer-events-none">
-          <svg class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-          <span class="text-sm text-slate-500">Drop files here, paste from clipboard, or click Upload</span>
         </div>
       </div>
 

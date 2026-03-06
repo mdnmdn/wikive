@@ -131,6 +131,39 @@ html, body, #app {
   margin: 0;
 }
 
+.sidebar-asset-drop {
+  border: 1px dashed hsl(var(--border));
+  border-radius: 0.75rem;
+  padding: 1rem 0.75rem;
+  text-align: center;
+  background: hsl(var(--background));
+  transition: border-color 0.2s, background 0.2s;
+  cursor: pointer;
+}
+
+.sidebar-asset-drop-active {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.08);
+}
+
+.sidebar-asset-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  cursor: pointer;
+}
+
+.sidebar-asset-upload-btn:hover {
+  background: hsl(var(--accent));
+}
+
 .prose h1 { font-size: 2rem; font-weight: 700; margin: 1.5rem 0 1rem; border-bottom: 1px solid hsl(var(--border)); padding-bottom: 0.5rem; }
 .prose h2 { font-size: 1.5rem; font-weight: 600; margin: 1.25rem 0 0.75rem; }
 .prose h3 { font-size: 1.25rem; font-weight: 600; margin: 1rem 0 0.5rem; }

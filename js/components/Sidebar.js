@@ -243,8 +243,28 @@ const Sidebar = {
           :search-query="searchQuery"
           :snippets-version="snippetsVersion"
         ></snippet-list>
-        <div v-else-if="activeTab === 'assets'" class="p-4 text-center">
-           <a href="#/_assets" class="text-xs text-primary font-medium hover:underline">Open Assets Manager</a>
+        <div v-else-if="activeTab === 'assets'" class="p-3 flex flex-col gap-3">
+          <div
+            class="sidebar-asset-drop"
+            :class="{ 'sidebar-asset-drop-active': assetDragging }"
+            @dragover.prevent="assetDragging = true"
+            @dragleave.prevent="assetDragging = false"
+            @drop.prevent="onAssetDrop"
+          >
+            <div v-if="assetUploading" class="flex flex-col items-center gap-2 text-xs">
+              <div class="spinner"></div>
+              <span>Uploading {{ assetUploadCount }} file(s)...</span>
+            </div>
+            <div v-else class="flex flex-col items-center gap-2 text-xs opacity-70">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+              <span>Drop files here</span>
+            </div>
+          </div>
+          <label class="sidebar-asset-upload-btn">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+            Upload
+            <input type="file" multiple class="hidden" @change="onAssetFileInput" />
+          </label>
         </div>
       </div>
 
@@ -254,12 +274,15 @@ const Sidebar = {
       </button>
     </aside>
   `,
-  props: ['rootId', 'currentPath', 'expandPath', 'snippetsVersion', 'isCollapsed'],
-  emits: ['refresh', 'toggle-collapse'],
+  props: ['rootId', 'currentPath', 'expandPath', 'snippetsVersion', 'assetsFolderId', 'isCollapsed'],
+  emits: ['refresh', 'toggle-collapse', 'toast', 'assets-uploaded'],
   data() {
     return {
       searchQuery: '',
       activeTab: 'wiki',
+      assetDragging: false,
+      assetUploading: false,
+      assetUploadCount: 0,
     };
   },
   watch: {
@@ -278,6 +301,47 @@ const Sidebar = {
       if (tab === 'assets') window.location.hash = '#/_assets';
       else if (tab === 'snippets' && !this.currentPath.startsWith('_snippets')) window.location.hash = '#/_snippets';
       else if (tab === 'wiki' && (this.currentPath.startsWith('_snippets') || this.currentPath.startsWith('_assets'))) window.location.hash = '#/';
+    },
+    onAssetFileInput(e) {
+      const files = Array.from(e.target.files || []);
+      if (files.length) this.uploadAssetFiles(files);
+      e.target.value = '';
+    },
+    onAssetDrop(e) {
+      this.assetDragging = false;
+      const files = Array.from(e.dataTransfer.files || []);
+      if (files.length) this.uploadAssetFiles(files);
+    },
+    async uploadAssetFiles(files) {
+      if (!files.length) return;
+      this.assetUploading = true;
+      this.assetUploadCount = files.length;
+      let success = 0;
+      try {
+        const folderId = this.assetsFolderId || await DriveService.getAssetsFolderId();
+        for (const file of files) {
+          try {
+            let name = file.name;
+            if (!name || name === 'image.png') {
+              const ext = file.type.split('/')[1] || 'bin';
+              name = 'pasted-' + Date.now() + '.' + ext;
+            }
+            await DriveService.uploadBinary(name, folderId, file, file.type || 'application/octet-stream');
+            success++;
+          } catch (e) {
+            this.$emit('toast', 'Failed to upload ' + file.name + ': ' + e.message, 'error');
+          }
+        }
+        if (success > 0) {
+          CacheService.remove('listing:' + folderId);
+          this.$emit('toast', success + ' file(s) uploaded', 'success');
+          this.$emit('assets-uploaded');
+        }
+      } catch (e) {
+        this.$emit('toast', 'Upload failed: ' + e.message, 'error');
+      }
+      this.assetUploading = false;
+      this.assetUploadCount = 0;
     }
   },
   components: { 'sidebar-tree': SidebarTree, 'snippet-list': SnippetList }
