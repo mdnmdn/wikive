@@ -17,8 +17,16 @@ const app = Vue.createApp({
         @refresh-page="refreshPage"
       ></app-header>
       <div class="app-body">
-        <sidebar :root-id="rootId" :current-path="currentPath" :expand-path="pendingExpandPath" @refresh="refreshSidebar" ref="sidebar"></sidebar>
-        <main class="main-content" :style="(isAssetsRoute || isSnippetsRoute) ? 'max-width: none' : ''">
+        <sidebar
+          :root-id="rootId"
+          :current-path="currentPath"
+          :expand-path="pendingExpandPath"
+          :is-collapsed="sidebarCollapsed"
+          @refresh="refreshSidebar"
+          @toggle-collapse="sidebarCollapsed = !sidebarCollapsed"
+          ref="sidebar"
+        ></sidebar>
+        <main class="main-content" :class="{ 'sidebar-collapsed': sidebarCollapsed }" :style="(isAssetsRoute || isSnippetsRoute) ? 'max-width: none' : ''">
           <template v-if="isAssetsRoute">
             <asset-manager
               :assets-folder-id="assetsFolderId"
@@ -28,6 +36,7 @@ const app = Vue.createApp({
           <template v-else-if="isSnippetsRoute">
             <snippet-manager
               :snippets-folder-id="snippetsFolderId"
+              :snippet-id="selectedSnippetId"
               @toast="showToast"
             ></snippet-manager>
           </template>
@@ -107,6 +116,8 @@ const app = Vue.createApp({
       assetsFolderId: null,
       isSnippetsRoute: false,
       snippetsFolderId: null,
+      selectedSnippetId: null,
+      sidebarCollapsed: false,
       darkMode: false,
       pendingExpandPath: null,
     };
@@ -167,6 +178,11 @@ const app = Vue.createApp({
         this.isSnippetsRoute = true;
         this.isAssetsRoute = false;
         this.resolved = null;
+        
+        // Extract snippet ID if present
+        const segments = this.currentPath.split('/');
+        this.selectedSnippetId = segments.length > 1 ? segments[1] : null;
+
         try {
           this.snippetsFolderId = await DriveService.getSnippetsFolderId();
         } catch (e) {
@@ -179,6 +195,7 @@ const app = Vue.createApp({
       this.isSnippetsRoute = false;
       this.assetsFolderId = null;
       this.snippetsFolderId = null;
+      this.selectedSnippetId = null;
 
       try {
         this.resolved = await DriveService.resolvePath(this.currentPath);

@@ -1,0 +1,32 @@
+# Agents
+
+## Goal
+Build a zero-backend personal wiki that runs entirely in the browser, storing Markdown pages and related files in the user’s Google Drive. The app is designed to run as a static bundle (no build step, no server), so everything loads from CDN-hosted libraries and Google APIs.
+
+## Core features
+- Google OAuth login via Google Identity Services with minimum scope (`drive.file`).
+- Markdown pages stored as Drive files, organized by folders.
+- Page viewing with Markdown rendering, syntax highlighting, and Mermaid diagrams.
+- Page editing with Toast UI Editor (WYSIWYG + Markdown).
+- Hash-based routing (`#/path`) for static hosting.
+- Sidebar navigation, breadcrumbs, new page creation, and quick refresh.
+- Asset manager for uploading, browsing, previewing, renaming, deleting, and copying wiki paths.
+- Snippet manager for temporary code/text snippets with expiry metadata.
+- Local caching with stale-while-revalidate for fast loads.
+- Optional dark mode toggle.
+
+## How it works
+- **Runtime boot**: `index.html` loads CDN dependencies (Vue 3 global build, editors, Markdown tooling), then app services/components, and finally `js/app.js` which mounts the Vue app.
+- **Authentication**: Google Identity Services uses the OAuth2 token flow to issue Drive API access tokens. Tokens and user profile data are cached in `sessionStorage` and refreshed when expired. Scope is `drive.file`, limiting access to files the app creates.
+- **Drive model**: A root wiki folder is created (from `CONFIG.ROOT_FOLDER_NAME`). Within it, `_assets` and `_snippets` subfolders are created on first use. Pages are stored as `.md` files, assets are binaries, and snippets store metadata (language, expiry) in Drive `appProperties`.
+- **Routing**: Hash routes resolve to Drive paths. For a path segment, the app tries `segment.md` first, then an exact name match, and falls back to a not-found view.
+- **UI flow**: Components request data from services, store it in local state, and render view/edit/asset/snippet modes based on the current route and app state.
+
+## Structure (high level)
+- `index.html`: Loads CDN dependencies and initializes the app.
+- `config.js`: App configuration (OAuth client ID, Drive API endpoints, cache TTL, scope).
+- `js/app.js`: Vue app, router, and global state.
+- `js/components/`: UI components (header, sidebar, editor, asset manager, snippets, etc.).
+- `js/services/`: Drive, auth, and cache services.
+- `css/app.css`: Layout and component styling.
+- `assets/`: App branding assets.

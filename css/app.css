@@ -19,8 +19,17 @@ html, body, #app {
   width: 260px;
   min-width: 260px;
   border-right: 1px solid hsl(var(--border));
-  overflow-y: auto;
+  overflow-y: hidden;
   background: hsl(var(--muted) / 0.3);
+  display: flex;
+  flex-direction: column;
+  transition: width 0.3s ease, min-width 0.3s ease;
+  position: relative;
+}
+
+.sidebar.collapsed {
+  width: 52px;
+  min-width: 52px;
 }
 
 .main-content {
@@ -28,9 +37,80 @@ html, body, #app {
   overflow-y: auto;
   padding: 2rem 3rem;
   max-width: 900px;
+  transition: margin-left 0.3s ease;
 }
 
-/* Prose styles for rendered markdown */
+.main-content.sidebar-collapsed {
+  /* No specific styles needed if using flex, but allows targeting */
+}
+
+/* Sidebar Nav Buttons */
+.nav-btn {
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  color: hsl(var(--muted-foreground));
+  transition: all 0.2s;
+}
+
+.nav-btn:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--foreground));
+}
+
+.nav-btn.active {
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+}
+
+.collapse-toggle {
+  position: absolute;
+  bottom: 1rem;
+  right: -12px;
+  width: 24px;
+  height: 24px;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  color: hsl(var(--muted-foreground));
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.collapse-toggle:hover {
+  color: hsl(var(--foreground));
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    top: 4.5rem;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    transform: translateX(0);
+  }
+  
+  .sidebar.collapsed {
+    transform: translateX(-100%);
+  }
+  
+  .main-content {
+    padding: 1.5rem;
+  }
+}
+
+/* Snippet Manager Adjustments */
+.snippet-manager {
+  display: flex;
+  height: 100%;
+  margin: 0;
+}
+
 .prose h1 { font-size: 2rem; font-weight: 700; margin: 1.5rem 0 1rem; border-bottom: 1px solid hsl(var(--border)); padding-bottom: 0.5rem; }
 .prose h2 { font-size: 1.5rem; font-weight: 600; margin: 1.25rem 0 0.75rem; }
 .prose h3 { font-size: 1.25rem; font-weight: 600; margin: 1rem 0 0.5rem; }
@@ -297,23 +377,6 @@ html, body, #app {
   color: hsl(var(--foreground));
 }
 
-/* Snippet Manager */
-.snippet-manager {
-  display: flex;
-  height: calc(100vh - 4.5rem); /* Header height approx 4.5rem */
-  margin: -2rem -3rem;
-  overflow: hidden;
-}
-
-.snippet-list-sidebar {
-  width: 300px;
-  min-width: 300px;
-  border-right: 1px solid hsl(var(--border));
-  display: flex;
-  flex-direction: column;
-  background: hsl(var(--background));
-}
-
 .snippet-content-area {
   flex: 1;
   display: flex;
@@ -323,7 +386,7 @@ html, body, #app {
 }
 
 .snippet-item {
-  padding: 0.75rem 1rem;
+  padding: 0.625rem 0.875rem;
   border-bottom: 1px solid hsl(var(--border));
   cursor: pointer;
   transition: background 0.15s;
