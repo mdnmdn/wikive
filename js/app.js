@@ -9,10 +9,13 @@ const app = Vue.createApp({
         :user="user"
         :resolved="resolved"
         :dark-mode="darkMode"
+        :is-snippets-route="isSnippetsRoute"
         @edit="startEdit"
         @save="save"
         @cancel="cancelEdit"
         @new-page="showNewPageDialog"
+        @new-snippet="createSnippetFromHeader"
+        @delete-page="deletePage"
         @toggle-dark="toggleDarkMode"
         @refresh-page="refreshPage"
       ></app-header>
@@ -21,12 +24,13 @@ const app = Vue.createApp({
           :root-id="rootId"
           :current-path="currentPath"
           :expand-path="pendingExpandPath"
+          :snippets-version="snippetListVersion"
           :is-collapsed="sidebarCollapsed"
           @refresh="refreshSidebar"
           @toggle-collapse="sidebarCollapsed = !sidebarCollapsed"
           ref="sidebar"
         ></sidebar>
-        <main class="main-content" :class="{ 'sidebar-collapsed': sidebarCollapsed }" :style="(isAssetsRoute || isSnippetsRoute) ? 'max-width: none' : ''">
+        <main class="main-content" :class="{ 'sidebar-collapsed': sidebarCollapsed, 'snippets-full': isSnippetsRoute, 'wiki-edit-full': mode === 'edit' }" :style="(isAssetsRoute || isSnippetsRoute || mode === 'edit') ? 'max-width: none' : ''">
           <template v-if="isAssetsRoute">
             <asset-manager
               :assets-folder-id="assetsFolderId"
@@ -35,9 +39,11 @@ const app = Vue.createApp({
           </template>
           <template v-else-if="isSnippetsRoute">
             <snippet-manager
+              ref="snippetManager"
               :snippets-folder-id="snippetsFolderId"
               :snippet-id="selectedSnippetId"
               @toast="showToast"
+              @refresh-snippets="refreshSnippets"
             ></snippet-manager>
           </template>
           <template v-else-if="mode === 'edit'">
@@ -117,9 +123,12 @@ const app = Vue.createApp({
       isSnippetsRoute: false,
       snippetsFolderId: null,
       selectedSnippetId: null,
+      snippetListVersion: 0,
+      pendingNewSnippet: false,
       sidebarCollapsed: false,
       darkMode: false,
       pendingExpandPath: null,
+      pendingEditPath: null,
     };
   },
   async mounted() {
@@ -185,6 +194,10 @@ const app = Vue.createApp({
 
         try {
           this.snippetsFolderId = await DriveService.getSnippetsFolderId();
+          if (this.pendingNewSnippet) {
+            this.pendingNewSnippet = false;
+            this.$nextTick(() => this.$refs.snippetManager?.createNewSnippet());
+          }
         } catch (e) {
           this.showToast('Failed to load snippets: ' + e.message, 'error');
         }
@@ -202,6 +215,11 @@ const app = Vue.createApp({
 
         if (this.resolved?.type === 'file') {
           this.fileContent = await DriveService.getFileContent(this.resolved.id);
+        }
+
+        if (this.pendingEditPath && this.currentPath === this.pendingEditPath && this.resolved?.type === 'file') {
+          this.mode = 'edit';
+          this.pendingEditPath = null;
         }
       } catch (e) {
         this.showToast('Error loading page: ' + e.message, 'error');
@@ -258,6 +276,8 @@ const app = Vue.createApp({
         this.showNewPage = false;
         this.newPagePath = '';
 
+        this.pendingEditPath = path;
+
         // Navigate to new page
         window.location.hash = '#/' + path;
 
@@ -284,6 +304,34 @@ const app = Vue.createApp({
       const id = this.rootId;
       this.rootId = null;
       this.$nextTick(() => { this.rootId = id; });
+      this.refreshSnippets();
+    },
+
+    refreshSnippets() {
+      this.snippetListVersion += 1;
+    },
+
+    createSnippetFromHeader() {
+      if (!this.isSnippetsRoute) {
+        window.location.hash = '#/_snippets';
+        this.pendingNewSnippet = true;
+        return;
+      }
+      this.$nextTick(() => this.$refs.snippetManager?.createNewSnippet());
+    },
+
+    async deletePage() {
+      if (!this.resolved || this.resolved.type !== 'file') return;
+      if (!confirm('Delete this page?')) return;
+      try {
+        await DriveService.deleteFile(this.resolved.id, this.resolved.parentId);
+        CacheService.remove('content:' + this.resolved.id);
+        CacheService.remove('path:' + this.currentPath);
+        this.showToast('Page deleted', 'success');
+        window.location.hash = '#/';
+      } catch (e) {
+        this.showToast('Failed to delete: ' + e.message, 'error');
+      }
     },
 
     toggleDarkMode() {

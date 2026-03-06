@@ -187,7 +187,10 @@ const DriveService = {
         // Try exact name match (file without .md or folder)
         const exact = children.find(f => f.name === segment);
         if (exact) {
-          const result = { id: exact.id, type: exact.isFolder ? 'folder' : 'file', name: exact.name, parentId: currentId };
+          if (exact.isFolder) {
+            return { type: 'not_found', parentId: currentId, name: segment, path };
+          }
+          const result = { id: exact.id, type: 'file', name: exact.name, parentId: currentId };
           CacheService.set(cacheKey, result);
           return result;
         }
@@ -432,7 +435,7 @@ const DriveService = {
 
   async getFileMetadata(fileId) {
     const res = await this._fetch(
-      `${CONFIG.DRIVE_API}/files/${fileId}?fields=id,name,mimeType,size,modifiedTime`
+      `${CONFIG.DRIVE_API}/files/${fileId}?fields=id,name,mimeType,size,modifiedTime,appProperties,createdTime`
     );
     return await res.json();
   },

@@ -124,7 +124,7 @@ const SnippetList = {
       </div>
     </div>
   `,
-  props: ['currentPath', 'searchQuery'],
+  props: ['currentPath', 'searchQuery', 'snippetsVersion'],
   data() {
     return {
       snippets: [],
@@ -140,6 +140,11 @@ const SnippetList = {
   },
   async mounted() {
     this.loadSnippets();
+  },
+  watch: {
+    snippetsVersion() {
+      this.loadSnippets();
+    },
   },
   methods: {
     async loadSnippets() {
@@ -236,6 +241,7 @@ const Sidebar = {
           v-else-if="activeTab === 'snippets'"
           :current-path="currentPath"
           :search-query="searchQuery"
+          :snippets-version="snippetsVersion"
         ></snippet-list>
         <div v-else-if="activeTab === 'assets'" class="p-4 text-center">
            <a href="#/_assets" class="text-xs text-primary font-medium hover:underline">Open Assets Manager</a>
@@ -248,7 +254,7 @@ const Sidebar = {
       </button>
     </aside>
   `,
-  props: ['rootId', 'currentPath', 'expandPath', 'isCollapsed'],
+  props: ['rootId', 'currentPath', 'expandPath', 'snippetsVersion', 'isCollapsed'],
   emits: ['refresh', 'toggle-collapse'],
   data() {
     return {

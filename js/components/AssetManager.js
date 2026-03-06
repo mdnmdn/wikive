@@ -322,6 +322,7 @@ const AssetManager = {
     },
 
     onPaste(e) {
+      if (e.defaultPrevented) return;
       // Only handle paste when asset manager is visible
       if (!this.currentFolderId) return;
       const items = e.clipboardData?.items;
@@ -336,6 +337,7 @@ const AssetManager = {
       }
       if (files.length) {
         e.preventDefault();
+        e.stopPropagation();
         this.uploadFiles(files);
       }
     },

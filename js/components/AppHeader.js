@@ -16,6 +16,9 @@ const AppHeader = {
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
             Edit
           </button>
+          <button @click="$emit('delete-page')" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border text-red-500 hover:bg-red-50 transition-colors" style="border-color: hsl(var(--border))" title="Delete page">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          </button>
         </template>
         <template v-if="mode === 'edit'">
           <button @click="$emit('save')" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md text-white hover:opacity-90 transition-colors" style="background-color: hsl(var(--primary))">
@@ -26,7 +29,7 @@ const AppHeader = {
             Cancel
           </button>
         </template>
-        <button @click="$emit('new-page')" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))" title="New page">
+        <button @click="handleNewAction" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))" :title="isSnippetsRoute ? 'New snippet' : 'New page'">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
         </button>
         <button @click="$emit('toggle-dark')" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))" title="Toggle dark mode">
@@ -47,11 +50,18 @@ const AppHeader = {
       </div>
     </header>
   `,
-  props: ['currentPath', 'mode', 'user', 'resolved', 'darkMode'],
-  emits: ['edit', 'save', 'cancel', 'new-page', 'toggle-dark', 'refresh-page'],
+  props: ['currentPath', 'mode', 'user', 'resolved', 'darkMode', 'isSnippetsRoute'],
+  emits: ['edit', 'save', 'cancel', 'new-page', 'new-snippet', 'delete-page', 'toggle-dark', 'refresh-page'],
   methods: {
     logout() {
       AuthService.logout();
     },
+    handleNewAction() {
+      if (this.isSnippetsRoute) {
+        this.$emit('new-snippet');
+      } else {
+        this.$emit('new-page');
+      }
+    }
   },
 };

@@ -44,6 +44,26 @@ html, body, #app {
   /* No specific styles needed if using flex, but allows targeting */
 }
 
+.main-content.snippets-full {
+  padding: 0;
+}
+
+.main-content.wiki-edit-full {
+  padding: 0;
+  max-width: none;
+}
+
+.page-editor {
+  height: 100%;
+}
+
+.page-editor .toastui-editor-defaultUI,
+.page-editor .toastui-editor-main,
+.page-editor .toastui-editor-md-container,
+.page-editor .toastui-editor-ww-container {
+  height: 100%;
+}
+
 /* Sidebar Nav Buttons */
 .nav-btn {
   padding: 0.5rem;

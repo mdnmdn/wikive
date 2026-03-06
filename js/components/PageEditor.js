@@ -27,7 +27,7 @@ const PageEditor = {
         el: this.$refs.editorEl,
         initialEditType: 'wysiwyg',
         previewStyle: 'vertical',
-        height: 'calc(100vh - 120px)',
+        height: '100%',
         initialValue: this.content || '',
         usageStatistics: false,
         toolbarItems: [
