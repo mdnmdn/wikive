@@ -226,6 +226,10 @@ const app = Vue.createApp({
           this.fileContent = await DriveService.getFileContent(this.resolved.id);
         }
 
+        if (this.resolved?.type === 'not_found' && this.resolved?.name === 'home') {
+          this.currentPath = 'home';
+        }
+
         if (this.pendingEditPath && this.currentPath === this.pendingEditPath && this.resolved?.type === 'file') {
           this.mode = 'edit';
           this.pendingEditPath = null;

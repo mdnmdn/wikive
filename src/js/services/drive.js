@@ -59,11 +59,10 @@ const DriveService = {
         // Folder not found, create it
         const parentIdToCreate = currentParentId === 'root' ? null : currentParentId;
         currentParentId = await this._createFolder(folderName, parentIdToCreate);
+      }
 
-        // If this is the last folder in the path and it's newly created, create welcome page
-        if (isLast) {
-          await this.createFile('index.md', currentParentId, this._welcomeContent());
-        }
+      if (isLast) {
+        await this.ensureHomePage(currentParentId);
       }
     }
 
@@ -158,7 +157,13 @@ const DriveService = {
 
   async resolvePath(path) {
     if (!path || path === '/' || path === '') {
-      return { id: await this.getRootFolderId(), type: 'folder', name: CONFIG.ROOT_FOLDER_NAME };
+      const rootId = await this.getRootFolderId();
+      const children = await this.listFolder(rootId);
+      const homeFile = children.find(f => !f.isFolder && f.name === 'home.md');
+      if (homeFile) {
+        return { id: homeFile.id, type: 'file', name: homeFile.name, parentId: rootId };
+      }
+      return { type: 'not_found', parentId: rootId, name: 'home', path: 'home' };
     }
 
     // Check cache

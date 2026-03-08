@@ -2,15 +2,14 @@
 const CONFIG = {
   // Replace with your Google Cloud Console OAuth 2.0 Client ID
   GOOGLE_CLIENT_ID:
-    "877456137532-qlk8nkmnulac4vv6fmmvbb6a6i39c914.apps.googleusercontent.com",
+    "87745xxxxx4.apps.googleusercontent.com",
 
   // Root folder path in Google Drive (supports hierarchical paths)
   // Examples:
   // - "_wiki" → creates/uses _wiki in Drive root
-  // - "sefin-devops/_wiki" → creates/uses sefin-devops, then _wiki inside it
   // - "test1/test2/_wiki" → creates full nested hierarchy automatically
   // The app will search for existing folders and create any missing levels.
-  ROOT_FOLDER_NAME: "sefin-devops/_wiki",
+  ROOT_FOLDER_NAME: "_wiki",
 
   // Cache TTL in milliseconds (5 minutes)
   CACHE_TTL: 5 * 60 * 1000,
