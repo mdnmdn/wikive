@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Excalidraw · Vue Integration</title>
+
+  <!-- ═══ ALL plain <script> tags — no ESM, no import maps ═══ -->
+
+  <!-- React 18 UMD (required by Excalidraw 0.17.x) -->
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+
+  <!-- Excalidraw 0.17.3 UMD (last version with UMD browser build) -->
+  <script src="https://cdn.jsdelivr.net/npm/@excalidraw/excalidraw@0.17.3/dist/excalidraw.production.min.js"></script>
+
+  <!-- Vue 3 global build -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"></script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --topbar-h: 56px;
+      --bg: #0e0f13;
+      --surface: #16171d;
+      --surface-hover: #1e1f27;
+      --border: #2a2b35;
+      --text: #e4e4e9;
+      --text-dim: #7a7b8a;
+      --accent: #6c5ce7;
+      --accent-glow: rgba(108, 92, 231, 0.25);
+      --success: #00b894;
+      --warning: #fdcb6e;
+      --danger: #e17055;
+      --radius: 10px;
+      --font: 'DM Sans', sans-serif;
+      --mono: 'JetBrains Mono', monospace;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); }
+    #app { height: 100%; display: flex; flex-direction: column; }
+
+    /* ── Top Bar ─────────────────────────────── */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 20px; height: var(--topbar-h); min-height: var(--topbar-h);
+      background: var(--surface); border-bottom: 1px solid var(--border); z-index: 100;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 14px; }
+    .logo {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--accent), #a29bfe);
+      border-radius: 8px; display: grid; place-items: center;
+      font-weight: 700; font-size: 14px; color: #fff;
+      box-shadow: 0 2px 12px var(--accent-glow);
+    }
+    .app-title { font-size: 15px; font-weight: 600; }
+    .app-title span { color: var(--text-dim); font-weight: 400; margin-left: 6px; font-size: 13px; }
+    .topbar-actions { display: flex; align-items: center; gap: 8px; }
+
+    /* ── Buttons ─────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 8px 16px; border: 1px solid var(--border); border-radius: var(--radius);
+      background: var(--surface); color: var(--text);
+      font-family: var(--font); font-size: 13px; font-weight: 500;
+      cursor: pointer; transition: all 0.15s ease; white-space: nowrap; user-select: none;
+    }
+    .btn:hover { background: var(--surface-hover); border-color: #3a3b48; }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn svg { width: 15px; height: 15px; stroke-width: 2; flex-shrink: 0; }
+    .btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 2px 12px var(--accent-glow); }
+    .btn-accent:hover { background: #7c6ff0; border-color: #7c6ff0; }
+    .btn-success { border-color: rgba(0,184,148,0.35); color: var(--success); }
+    .btn-success:hover { background: rgba(0,184,148,0.08); }
+    .btn-warning { border-color: rgba(253,203,110,0.3); color: var(--warning); }
+    .btn-warning:hover { background: rgba(253,203,110,0.07); }
+    .separator { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
+
+    /* ── Canvas ──────────────────────────────── */
+    .canvas-wrap {
+      position: relative; flex: 1 1 0%;
+      height: calc(100vh - var(--topbar-h)); min-height: 0;
+    }
+    #excalidraw-container {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+    }
+
+    /* ── Loading ─────────────────────────────── */
+    .loading-overlay {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: var(--bg); z-index: 50; gap: 16px;
+    }
+    .loading-spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { font-size: 13px; color: var(--text-dim); }
+    .loading-sub { font-size: 11px; color: var(--text-dim); opacity: 0.6; font-family: var(--mono); }
+
+    /* ── Toasts ──────────────────────────────── */
+    .toast-container {
+      position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+      display: flex; flex-direction: column-reverse; gap: 8px;
+    }
+    .toast {
+      display: flex; align-items: center; gap: 10px; padding: 12px 18px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      font-size: 13px; font-weight: 500; box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      animation: toast-in 0.35s cubic-bezier(0.16, 1, 0.3, 1); max-width: 340px;
+    }
+    .toast.leaving { animation: toast-out 0.25s ease forwards; }
+    .toast-icon { width: 18px; height: 18px; flex-shrink: 0; }
+    .toast-icon.success { color: var(--success); }
+    .toast-icon.info { color: var(--accent); }
+    .toast-icon.warning { color: var(--warning); }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(12px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes toast-out { to { opacity: 0; transform: translateY(-8px) scale(0.96); } }
+
+    /* ── Event Log ───────────────────────────── */
+    .event-log-toggle { position: fixed; bottom: 24px; left: 24px; z-index: 200; }
+    .event-log {
+      position: fixed; bottom: 72px; left: 24px; width: 360px; max-height: 280px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      z-index: 200; display: flex; flex-direction: column;
+      box-shadow: 0 12px 48px rgba(0,0,0,0.5); animation: toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .event-log-header {
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim);
+    }
+    .event-log-body { overflow-y: auto; padding: 8px; flex: 1; }
+    .event-entry { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 6px; font-size: 12px; line-height: 1.5; }
+    .event-entry:hover { background: rgba(255,255,255,0.02); }
+    .event-time { font-family: var(--mono); font-size: 11px; color: var(--text-dim); flex-shrink: 0; }
+    .event-badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0; }
+    .event-badge.load { background: rgba(108,92,231,0.15); color: var(--accent); }
+    .event-badge.save { background: rgba(0,184,148,0.15); color: var(--success); }
+    .event-badge.export { background: rgba(253,203,110,0.15); color: var(--warning); }
+    .event-msg { color: var(--text); word-break: break-word; }
+    .clear-btn { font-size: 11px; color: var(--text-dim); background: none; border: none; cursor: pointer; font-family: var(--font); padding: 2px 6px; border-radius: 4px; }
+    .clear-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+    .hidden { display: none; }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="logo">Ex</div>
+      <div class="app-title">Excalidraw <span>× Vue</span></div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn" :disabled="!ready" @click="triggerLoad">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+        Load
+      </button>
+      <div class="separator"></div>
+      <button class="btn btn-success" :disabled="!ready" @click="handleSave">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
+        Save
+      </button>
+      <div class="separator"></div>
+      <button class="btn btn-warning" :disabled="!ready" @click="handleExportPNG">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a2.25 2.25 0 002.25-2.25V6a2.25 2.25 0 00-2.25-2.25H3.75A2.25 2.25 0 001.5 6v12.75A2.25 2.25 0 003.75 21z"/></svg>
+        PNG
+      </button>
+      <button class="btn btn-warning" :disabled="!ready" @click="handleExportSVG">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z"/></svg>
+        SVG
+      </button>
+      <button class="btn btn-accent" :disabled="!ready" @click="handleExportJSON">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5"/></svg>
+        JSON
+      </button>
+    </div>
+  </header>
+
+  <div class="canvas-wrap">
+    <div class="loading-overlay" v-if="!ready">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">{{ loadingMsg }}</div>
+      <div class="loading-sub" v-if="loadingDetail">{{ loadingDetail }}</div>
+    </div>
+    <div id="excalidraw-container"></div>
+  </div>
+
+  <div class="event-log-toggle">
+    <button class="btn" @click="showLog = !showLog">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
+      Event Log
+      <span v-if="events.length" style="font-family:var(--mono);color:var(--accent)">({{ events.length }})</span>
+    </button>
+  </div>
+
+  <div class="event-log" v-if="showLog">
+    <div class="event-log-header">
+      <span>Event Stream</span>
+      <button class="clear-btn" @click="events = []">Clear</button>
+    </div>
+    <div class="event-log-body" ref="logBody">
+      <div v-if="events.length === 0" style="text-align:center;padding:24px;color:var(--text-dim);font-size:12px;">
+        No events yet. Try load, save, or export.
+      </div>
+      <div class="event-entry" v-for="(ev, i) in events" :key="i">
+        <span class="event-time">{{ ev.time }}</span>
+        <span class="event-badge" :class="ev.type">{{ ev.type }}</span>
+        <span class="event-msg">{{ ev.message }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container">
+    <div v-for="t in toasts" :key="t.id" class="toast" :class="{ leaving: t.leaving }">
+      <svg class="toast-icon" :class="t.type" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path v-if="t.type === 'success'" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        <path v-else-if="t.type === 'info'" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
+        <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+      </svg>
+      <span>{{ t.message }}</span>
+    </div>
+  </div>
+
+  <input type="file" ref="fileInput" class="hidden" accept=".excalidraw,.json" @change="handleFileLoad" />
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── Verify globals ────────────────────────────
+  if (!window.React)        { document.body.innerText = "ERROR: React not loaded"; return; }
+  if (!window.ReactDOM)     { document.body.innerText = "ERROR: ReactDOM not loaded"; return; }
+  if (!window.ExcalidrawLib){ document.body.innerText = "ERROR: ExcalidrawLib not loaded"; return; }
+  if (!window.Vue)          { document.body.innerText = "ERROR: Vue not loaded"; return; }
+
+  console.log("[Init] React", React.version, "| ReactDOM OK | ExcalidrawLib OK | Vue OK");
+
+  Vue.createApp({
+    setup: function () {
+      var ref       = Vue.ref;
+      var nextTick  = Vue.nextTick;
+      var onMounted = Vue.onMounted;
+
+      var events        = ref([]);
+      var toasts        = ref([]);
+      var showLog       = ref(false);
+      var ready         = ref(false);
+      var loadingMsg    = ref("Mounting Excalidraw…");
+      var loadingDetail = ref("");
+      var fileInput     = ref(null);
+      var logBody       = ref(null);
+
+      var excalidrawAPI = null;
+      var toastId = 0;
+
+      function now() { return new Date().toLocaleTimeString("en-GB", { hour12: false }); }
+
+      function logEvent(type, msg) {
+        events.value.push({ type: type, message: msg, time: now() });
+        nextTick(function () { if (logBody.value) logBody.value.scrollTop = logBody.value.scrollHeight; });
+      }
+
+      function toast(msg, type) {
+        type = type || "info";
+        var id = ++toastId;
+        toasts.value.push({ id: id, message: msg, type: type, leaving: false });
+        setTimeout(function () {
+          var t = toasts.value.find(function (x) { return x.id === id; });
+          if (t) t.leaving = true;
+          setTimeout(function () { toasts.value = toasts.value.filter(function (x) { return x.id !== id; }); }, 300);
+        }, 2800);
+      }
+
+      function downloadBlob(blob, fn) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url; a.download = fn;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
+      }
+      function downloadText(text, fn, mime) {
+        downloadBlob(new Blob([text], { type: mime || "application/json" }), fn);
+      }
+
+      // ── Mount Excalidraw (React 18 UMD) ──────
+      onMounted(function () {
+        var container = document.getElementById("excalidraw-container");
+        var rect = container.getBoundingClientRect();
+        console.log("[Mount] Container:", rect.width + "x" + rect.height);
+
+        // React 18 createRoot
+        var root = ReactDOM.createRoot(container);
+
+        var el = React.createElement(ExcalidrawLib.Excalidraw, {
+          theme: "dark",
+          excalidrawAPI: function (api) {
+            console.log("[Mount] excalidrawAPI received");
+            excalidrawAPI = api;
+            ready.value = true;
+            logEvent("load", "Excalidraw mounted and ready");
+            toast("Canvas ready — draw something!", "success");
+          }
+        });
+
+        root.render(el);
+        console.log("[Mount] render() called");
+      });
+
+      // ── Load ─────────────────────────────────
+      function triggerLoad() { if (fileInput.value) fileInput.value.click(); }
+
+      function handleFileLoad(e) {
+        var file = e.target.files && e.target.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+          try {
+            var data = JSON.parse(ev.target.result);
+            if (excalidrawAPI) {
+              excalidrawAPI.updateScene({
+                elements: data.elements || [],
+                appState: Object.assign({}, data.appState || {}, { theme: "dark" })
+              });
+              excalidrawAPI.scrollToContent();
+            }
+            var n = (data.elements || []).length;
+            logEvent("load", 'Loaded "' + file.name + '" — ' + n + " element" + (n !== 1 ? "s" : ""));
+            toast("Loaded " + n + " elements", "success");
+          } catch (err) {
+            logEvent("load", "Parse error: " + err.message);
+            toast("Failed to parse file", "warning");
+          }
+        };
+        reader.readAsText(file);
+        e.target.value = "";
+      }
+
+      // ── Save ─────────────────────────────────
+      function handleSave() {
+        if (!excalidrawAPI) return;
+        var els = excalidrawAPI.getSceneElements();
+        var st  = excalidrawAPI.getAppState();
+        var fs  = excalidrawAPI.getFiles();
+        var json = JSON.stringify({
+          type: "excalidraw", version: 2, source: "vue-excalidraw",
+          elements: els,
+          appState: { viewBackgroundColor: st.viewBackgroundColor, gridSize: st.gridSize },
+          files: fs
+        }, null, 2);
+        downloadText(json, "drawing.excalidraw");
+        logEvent("save", "Saved " + els.length + " elements");
+        toast("Scene saved", "success");
+      }
+
+      // ── Export PNG ────────────────────────────
+      function handleExportPNG() {
+        if (!excalidrawAPI) return;
+        var els = excalidrawAPI.getSceneElements();
+        if (!els.length) { toast("Draw something first", "warning"); return; }
+        ExcalidrawLib.exportToBlob({
+          elements: els,
+          appState: Object.assign({}, excalidrawAPI.getAppState(), { exportWithDarkMode: true }),
+          files: excalidrawAPI.getFiles(),
+          mimeType: "image/png"
+        }).then(function (blob) {
+          downloadBlob(blob, "drawing.png");
+          var kb = (blob.size / 1024).toFixed(1);
+          logEvent("export", "PNG — " + kb + " KB");
+          toast("PNG exported (" + kb + " KB)", "success");
+        }).catch(function (err) {
+          logEvent("export", "PNG error: " + err.message);
+          toast("PNG export failed", "warning");
+        });
+      }
+
+      // ── Export SVG ────────────────────────────
+      function handleExportSVG() {
+        if (!excalidrawAPI) return;
+        var els = excalidrawAPI.getSceneElements();
+        if (!els.length) { toast("Draw something first", "warning"); return; }
+        ExcalidrawLib.exportToSvg({
+          elements: els,
+          appState: Object.assign({}, excalidrawAPI.getAppState(), { exportWithDarkMode: true }),
+          files: excalidrawAPI.getFiles()
+        }).then(function (svg) {
+          var t = new XMLSerializer().serializeToString(svg);
+          downloadText(t, "drawing.svg", "image/svg+xml");
+          var kb = (new Blob([t]).size / 1024).toFixed(1);
+          logEvent("export", "SVG — " + kb + " KB");
+          toast("SVG exported (" + kb + " KB)", "success");
+        }).catch(function (err) {
+          logEvent("export", "SVG error: " + err.message);
+          toast("SVG export failed", "warning");
+        });
+      }
+
+      // ── Export JSON ───────────────────────────
+      function handleExportJSON() {
+        if (!excalidrawAPI) return;
+        var els = excalidrawAPI.getSceneElements();
+        if (!els.length) { toast("Draw something first", "warning"); return; }
+        var json = JSON.stringify(els, null, 2);
+        downloadText(json, "elements.json");
+        logEvent("export", "JSON — " + els.length + " elements");
+        toast("Exported " + els.length + " elements", "success");
+      }
+
+      return {
+        events: events, toasts: toasts, showLog: showLog,
+        ready: ready, loadingMsg: loadingMsg, loadingDetail: loadingDetail,
+        fileInput: fileInput, logBody: logBody,
+        triggerLoad: triggerLoad, handleFileLoad: handleFileLoad,
+        handleSave: handleSave, handleExportPNG: handleExportPNG,
+        handleExportSVG: handleExportSVG, handleExportJSON: handleExportJSON
+      };
+    }
+  }).mount("#app");
+
+  console.log("[Init] Vue app mounted");
+})();
+</script>
+</body>
+</html>

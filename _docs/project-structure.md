@@ -16,14 +16,16 @@ js/components/
   PageView.js
   Sidebar.js
   SnippetManager.js
+  DrawingManager.js
 js/services/
   auth.js
   cache.js
   drive.js
 assets/
+_drawings/
 ```
 
-## Tech stack (CDN)
+## Tech stack (CDN & Local)
 - Vue 3 (global build) for UI composition.
 - Tailwind CSS for styling and utility classes.
 - marked.js for Markdown rendering.
@@ -31,17 +33,19 @@ assets/
 - mermaid for diagrams.
 - Toast UI Editor for page editing.
 - Ace Editor for snippets.
+- Excalidraw Web Component (built from `components/excalidraw-webcomponent`).
 - Google Identity Services + Google Drive REST API.
 
 ## Script loading and boot flow
-- `index.html` loads CDN libraries first (UI frameworks and editors).
+- `index.html` loads CDN libraries and the local Excalidraw web component script.
 - `config.js` defines OAuth client ID, Drive API endpoints, cache TTL, and scope.
 - Services (`cache.js`, `auth.js`, `drive.js`) load before components.
 - Components are registered globally, then `js/app.js` mounts the Vue app.
-- Vue is pulled from `https://unpkg.com/vue@3/dist/vue.global.prod.js` to avoid a build step.
+- Vue is pulled from `https://unpkg.com/vue@3/dist/vue.global.prod.js` to avoid a build step for the main application.
 
 ## Architecture approach
-- **No build step**: plain HTML/CSS/JS with CDN dependencies.
+- **No build step for main app**: plain HTML/CSS/JS with CDN dependencies.
+- **Pre-built components**: Excalidraw is bundled as a web component using Vite to simplify embedding.
 - **Thin services**: `AuthService`, `DriveService`, `CacheService` encapsulate external APIs and storage.
 - **State at the root**: `js/app.js` holds global state and switches between view/edit/assets/snippets.
 - **Component-driven UI**: each component owns its local state, calling services as needed.
@@ -53,7 +57,7 @@ assets/
 
 ## Drive integration
 - Root wiki folder path is defined by `CONFIG.ROOT_FOLDER_NAME` (supports nested paths).
-- `_assets` and `_snippets` folders are created lazily on first access.
+- `_assets`, `_snippets`, and `_drawings` folders are created lazily on first access.
 - Page routing resolves to Drive files by trying `segment.md` first, then an exact name match.
 - Snippets store `type`, `expiryTs`, and `duration` in Drive `appProperties` metadata.
 
@@ -62,6 +66,7 @@ assets/
 - Wiki pages: `#/path/to/page` resolves to a Drive folder or `page.md`.
 - Assets: `#/_assets` opens the asset manager (subfolders handled internally).
 - Snippets: `#/_snippets` and `#/_snippets/<id>` open snippet list/editor.
+- Drawings: `#/_drawings` and `#/_drawings/<id>` open the drawings list/editor.
 - Route resolution prefers `segment.md`, then exact name match.
 
 ## Services
@@ -76,10 +81,15 @@ assets/
 - `PageEditor`: Toast UI Editor wrapper.
 - `AssetManager`: Uploads, previews, downloads, and wiki path copying.
 - `SnippetManager`: Ace-based editor with expiry metadata.
+- `DrawingManager`: Custom web component-based editor for creating and reopening diagrams stored under `_drawings`.
 
 ## Assets and snippets
 - Assets live in Drive under `_wiki/_assets` and are linked with `/_assets/...` paths.
 - Snippets live under `_wiki/_snippets` with metadata for language and expiry.
+
+## Drawings
+- Drawings live in Drive under `_wiki/_drawings` as Excalidraw JSON files.
+- The drawings manager lets you create **new diagrams** and **open diagrams** for further editing.
 
 ## How to extend
 - **New component**: add a file under `js/components/`, then register it in `js/app.js`.

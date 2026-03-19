@@ -349,6 +349,17 @@ const DriveService = {
     return id;
   },
 
+  async getDrawingsFolderId() {
+    const rootId = await this.getRootFolderId();
+    const children = await this.listFolder(rootId);
+    const existing = children.find(f => f.isFolder && f.name === '_drawings');
+    if (existing) return existing.id;
+
+    const id = await this._createFolder('_drawings', rootId);
+    CacheService.remove('listing:' + rootId);
+    return id;
+  },
+
   async getSnippetsFolderId() {
     const rootId = await this.getRootFolderId();
     const children = await this.listFolder(rootId);

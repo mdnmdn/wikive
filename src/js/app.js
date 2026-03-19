@@ -27,6 +27,9 @@ const app = Vue.createApp({
           :expand-path="pendingExpandPath"
           :snippets-version="snippetListVersion"
           :assets-folder-id="assetsFolderId"
+          :is-drawings-route="isDrawingsRoute"
+          :drawings-folder-id="drawingsFolderId"
+          :selected-drawing-id="selectedDrawingId"
           :is-collapsed="sidebarCollapsed"
           @refresh="refreshSidebar"
           @toggle-collapse="sidebarCollapsed = !sidebarCollapsed"
@@ -34,7 +37,7 @@ const app = Vue.createApp({
           @assets-uploaded="refreshAssetsFromSidebar"
           ref="sidebar"
         ></sidebar>
-        <main class="main-content" :class="{ 'sidebar-collapsed': sidebarCollapsed, 'snippets-full': isSnippetsRoute, 'wiki-edit-full': mode === 'edit' }" :style="(isAssetsRoute || isSnippetsRoute || mode === 'edit') ? 'max-width: none' : ''">
+        <main class="main-content" :class="{ 'sidebar-collapsed': sidebarCollapsed, 'snippets-full': isSnippetsRoute, 'wiki-edit-full': mode === 'edit' }" :style="(isAssetsRoute || isSnippetsRoute || isDrawingsRoute || mode === 'edit') ? 'max-width: none' : ''">
           <template v-if="isAssetsRoute">
             <asset-manager
               ref="assetManager"
@@ -51,6 +54,14 @@ const app = Vue.createApp({
               @refresh-snippets="refreshSnippets"
               @snippet-selected="onSnippetSelected"
             ></snippet-manager>
+          </template>
+          <template v-else-if="isDrawingsRoute">
+            <drawing-manager
+              ref="drawingManager"
+              :drawings-folder-id="drawingsFolderId"
+              :drawing-id="selectedDrawingId"
+              @toast="showToast"
+            ></drawing-manager>
           </template>
           <template v-else-if="mode === 'edit'">
             <page-editor
@@ -132,6 +143,9 @@ const app = Vue.createApp({
       selectedSnippetName: '',
       snippetListVersion: 0,
       pendingNewSnippet: false,
+      isDrawingsRoute: false,
+      drawingsFolderId: null,
+      selectedDrawingId: null,
       sidebarCollapsed: false,
       darkMode: false,
       pendingExpandPath: null,
@@ -180,6 +194,7 @@ const app = Vue.createApp({
       if (this.currentPath === '_assets' || this.currentPath.startsWith('_assets/')) {
         this.isAssetsRoute = true;
         this.isSnippetsRoute = false;
+        this.isDrawingsRoute = false;
         this.resolved = null;
         try {
           this.assetsFolderId = await DriveService.getAssetsFolderId();
@@ -193,6 +208,7 @@ const app = Vue.createApp({
       if (this.currentPath === '_snippets' || this.currentPath.startsWith('_snippets/')) {
         this.isSnippetsRoute = true;
         this.isAssetsRoute = false;
+        this.isDrawingsRoute = false;
         this.resolved = null;
         
         // Extract snippet ID if present
@@ -212,12 +228,33 @@ const app = Vue.createApp({
         return;
       }
 
+      // Check if navigating to drawings
+      if (this.currentPath === '_drawings' || this.currentPath.startsWith('_drawings/')) {
+        this.isDrawingsRoute = true;
+        this.isAssetsRoute = false;
+        this.isSnippetsRoute = false;
+        this.resolved = null;
+
+        const segments = this.currentPath.split('/');
+        this.selectedDrawingId = segments.length > 1 ? segments[1] : null;
+
+        try {
+          this.drawingsFolderId = await DriveService.getDrawingsFolderId();
+        } catch (e) {
+          this.showToast('Failed to load drawings: ' + e.message, 'error');
+        }
+        return;
+      }
+
       this.isAssetsRoute = false;
       this.isSnippetsRoute = false;
+      this.isDrawingsRoute = false;
       this.assetsFolderId = null;
       this.snippetsFolderId = null;
+      this.drawingsFolderId = null;
       this.selectedSnippetId = null;
       this.selectedSnippetName = '';
+      this.selectedDrawingId = null;
 
       try {
         this.resolved = await DriveService.resolvePath(this.currentPath);
@@ -411,6 +448,7 @@ app.component('page-not-found', PageNotFound);
 app.component('page-editor', PageEditor);
 app.component('asset-manager', AssetManager);
 app.component('snippet-manager', SnippetManager);
+app.component('drawing-manager', DrawingManager);
 
 // Mount
 app.mount('#app');

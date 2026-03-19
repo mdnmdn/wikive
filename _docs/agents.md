@@ -12,15 +12,20 @@ Build a zero-backend personal wiki that runs entirely in the browser, storing Ma
 - Sidebar navigation, breadcrumbs, new page creation, and quick refresh.
 - Asset manager for uploading, browsing, previewing, renaming, deleting, and copying wiki paths.
 - Snippet manager for temporary code/text snippets with expiry metadata.
+- Drawings manager for creating and reopening Excalidraw diagrams.
 - Local caching with stale-while-revalidate for fast loads.
 - Optional dark mode toggle.
 
 ## How it works
-- **Runtime boot**: `index.html` loads CDN dependencies (Vue 3 global build, editors, Markdown tooling), then app services/components, and finally `js/app.js` which mounts the Vue app.
+- **Runtime boot**: `index.html` loads CDN dependencies (Vue 3 global build, editors, Markdown tooling) and the locally built Excalidraw web component, then app services/components, and finally `js/app.js` which mounts the Vue app.
 - **Authentication**: Google Identity Services uses the OAuth2 token flow to issue Drive API access tokens. Tokens and user profile data are cached in `sessionStorage` and refreshed when expired. Scope is `drive.file`, limiting access to files the app creates.
-- **Drive model**: A root wiki folder is created (from `CONFIG.ROOT_FOLDER_NAME`). Within it, `_assets` and `_snippets` subfolders are created on first use. Pages are stored as `.md` files, assets are binaries, and snippets store metadata (language, expiry) in Drive `appProperties`.
+- **Drive model**: A root wiki folder is created (from `CONFIG.ROOT_FOLDER_NAME`). Within it, `_assets`, `_snippets`, and `_drawings` subfolders are created on first use. Pages are stored as `.md` files, assets are binaries, snippets store metadata (language, expiry) in Drive `appProperties`, and drawings store Excalidraw JSON.
 - **Routing**: Hash routes resolve to Drive paths. For a path segment, the app tries `segment.md` first, then an exact name match, and falls back to a not-found view.
-- **UI flow**: Components request data from services, store it in local state, and render view/edit/asset/snippet modes based on the current route and app state.
+- **UI flow**: Components request data from services, store it in local state, and render view/edit/asset/snippet/drawing modes based on the current route and app state.
+
+## Drawings
+- **New diagrams**: Use the drawings manager UI to create a new Excalidraw diagram, which is saved as a JSON file under the `_drawings` folder in the wiki root.
+- **Open diagrams**: Browse and open existing diagram files from `_drawings` to continue editing them in the Excalidraw canvas.
 
 ## Structure (high level)
 - `index.html`: Loads CDN dependencies and initializes the app.

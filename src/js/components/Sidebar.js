@@ -182,6 +182,78 @@ const SnippetList = {
   }
 };
 
+const DrawingList = {
+  template: `
+    <div class="flex-1 overflow-y-auto">
+      <div v-if="loading" class="flex justify-center py-8"><div class="spinner"></div></div>
+      <div v-else-if="filteredDrawings.length === 0" class="text-center py-8 text-xs opacity-50">No drawings</div>
+      <div
+        v-else
+        v-for="d in filteredDrawings"
+        :key="d.id"
+        class="snippet-item"
+        :class="{ 'active': isActive(d) }"
+        @click="selectDrawing(d)"
+      >
+        <div class="font-medium text-xs truncate" :title="d.name">{{ d.name }}</div>
+        <div class="flex items-center justify-between gap-2 mt-1">
+          <div class="text-[9px] uppercase tracking-wider opacity-60">{{ formatRelativeDate(d.modifiedTime) }}</div>
+        </div>
+      </div>
+    </div>
+  `,
+  props: ['drawingsFolderId', 'selectedDrawingId', 'searchQuery'],
+  data() {
+    return {
+      drawings: [],
+      loading: false,
+    };
+  },
+  computed: {
+    filteredDrawings() {
+      const q = this.searchQuery.toLowerCase().trim();
+      if (!q) return this.drawings;
+      return this.drawings.filter(d => d.name.toLowerCase().includes(q));
+    },
+  },
+  watch: {
+    drawingsFolderId: {
+      handler(id) {
+        if (id) this.loadDrawings();
+      },
+      immediate: true,
+    },
+  },
+  methods: {
+    async loadDrawings() {
+      if (!this.drawingsFolderId) return;
+      this.loading = true;
+      try {
+        const all = await DriveService.listFolder(this.drawingsFolderId);
+        this.drawings = all.filter(f => !f.isFolder);
+      } catch (e) {
+        console.error(e);
+      }
+      this.loading = false;
+    },
+    selectDrawing(d) {
+      window.location.hash = '#/_drawings/' + d.id;
+    },
+    isActive(d) {
+      return this.selectedDrawingId && this.selectedDrawingId === d.id;
+    },
+    formatRelativeDate(dateStr) {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      const diff = Date.now() - date.getTime();
+      if (diff < 60000) return 'Just now';
+      if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+      if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+      return date.toLocaleDateString();
+    },
+  },
+};
+
 const Sidebar = {
   template: `
     <aside class="sidebar" :class="{ 'collapsed': isCollapsed }">
@@ -202,6 +274,16 @@ const Sidebar = {
           title="Snippets"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+        </button>
+        <button
+          @click="setTab('drawings')"
+          class="nav-btn"
+          :class="{ active: activeTab === 'drawings' }"
+          title="Drawings"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h16v12H4zM8 20h8"/>
+          </svg>
         </button>
         <button
           @click="setTab('assets')"
@@ -243,6 +325,12 @@ const Sidebar = {
           :search-query="searchQuery"
           :snippets-version="snippetsVersion"
         ></snippet-list>
+        <drawing-list
+          v-else-if="activeTab === 'drawings' && isDrawingsRoute && selectedDrawingId"
+          :drawings-folder-id="drawingsFolderId"
+          :selected-drawing-id="selectedDrawingId"
+          :search-query="searchQuery"
+        ></drawing-list>
         <div v-else-if="activeTab === 'assets'" class="p-3 flex flex-col gap-3">
           <div
             class="sidebar-asset-drop"
@@ -274,7 +362,7 @@ const Sidebar = {
       </button>
     </aside>
   `,
-  props: ['rootId', 'currentPath', 'expandPath', 'snippetsVersion', 'assetsFolderId', 'isCollapsed'],
+  props: ['rootId', 'currentPath', 'expandPath', 'snippetsVersion', 'assetsFolderId', 'isDrawingsRoute', 'drawingsFolderId', 'selectedDrawingId', 'isCollapsed'],
   emits: ['refresh', 'toggle-collapse', 'toast', 'assets-uploaded'],
   data() {
     return {
@@ -289,6 +377,7 @@ const Sidebar = {
     currentPath: {
       handler(path) {
         if (path.startsWith('_snippets')) this.activeTab = 'snippets';
+        else if (path.startsWith('_drawings')) this.activeTab = 'drawings';
         else if (path.startsWith('_assets')) this.activeTab = 'assets';
         else this.activeTab = 'wiki';
       },
@@ -300,7 +389,8 @@ const Sidebar = {
       this.activeTab = tab;
       if (tab === 'assets') window.location.hash = '#/_assets';
       else if (tab === 'snippets' && !this.currentPath.startsWith('_snippets')) window.location.hash = '#/_snippets';
-      else if (tab === 'wiki' && (this.currentPath.startsWith('_snippets') || this.currentPath.startsWith('_assets'))) window.location.hash = '#/';
+       else if (tab === 'drawings' && !this.currentPath.startsWith('_drawings')) window.location.hash = '#/_drawings';
+      else if (tab === 'wiki' && (this.currentPath.startsWith('_snippets') || this.currentPath.startsWith('_assets') || this.currentPath.startsWith('_drawings'))) window.location.hash = '#/';
     },
     onAssetFileInput(e) {
       const files = Array.from(e.target.files || []);
@@ -344,5 +434,5 @@ const Sidebar = {
       this.assetUploadCount = 0;
     }
   },
-  components: { 'sidebar-tree': SidebarTree, 'snippet-list': SnippetList }
+  components: { 'sidebar-tree': SidebarTree, 'snippet-list': SnippetList, 'drawing-list': DrawingList }
 };

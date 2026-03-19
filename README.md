@@ -26,8 +26,8 @@ You can serve the project using `just`:
 # Serve using Python 3
 just serve
 
-# Serve using npx serve
-just npx-serve
+# Serve using pnpm serve
+just pnpm-serve
 ```
 
 The app will be available at `http://localhost:9595`.
