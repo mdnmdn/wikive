@@ -29,7 +29,7 @@ const AppHeader = {
             Cancel
           </button>
         </template>
-        <button @click="handleNewAction" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))" :title="isSnippetsRoute ? 'New snippet' : 'New page'">
+        <button @click="handleNewAction" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))" :title="isSnippetsRoute ? 'New snippet' : (isDrawingsRoute ? 'New drawing' : 'New page')">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
         </button>
         <button @click="$emit('toggle-dark')" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))" title="Toggle dark mode">
@@ -50,8 +50,8 @@ const AppHeader = {
       </div>
     </header>
   `,
-  props: ['currentPath', 'mode', 'user', 'resolved', 'darkMode', 'isSnippetsRoute', 'snippetName'],
-  emits: ['edit', 'save', 'cancel', 'new-page', 'new-snippet', 'delete-page', 'toggle-dark', 'refresh-page'],
+  props: ['currentPath', 'mode', 'user', 'resolved', 'darkMode', 'isSnippetsRoute', 'isDrawingsRoute', 'snippetName', 'drawingName'],
+  emits: ['edit', 'save', 'cancel', 'new-page', 'new-snippet', 'new-drawing', 'delete-page', 'toggle-dark', 'refresh-page'],
   methods: {
     logout() {
       AuthService.logout();
@@ -59,6 +59,8 @@ const AppHeader = {
     handleNewAction() {
       if (this.isSnippetsRoute) {
         this.$emit('new-snippet');
+      } else if (this.isDrawingsRoute) {
+        this.$emit('new-drawing');
       } else {
         this.$emit('new-page');
       }

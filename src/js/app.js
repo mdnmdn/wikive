@@ -10,12 +10,15 @@ const app = Vue.createApp({
         :resolved="resolved"
         :dark-mode="darkMode"
         :is-snippets-route="isSnippetsRoute"
+        :is-drawings-route="isDrawingsRoute"
         :snippet-name="selectedSnippetName"
+        :drawing-name="selectedDrawingName"
         @edit="startEdit"
         @save="save"
         @cancel="cancelEdit"
         @new-page="showNewPageDialog"
         @new-snippet="createSnippetFromHeader"
+        @new-drawing="createDrawingFromHeader"
         @delete-page="deletePage"
         @toggle-dark="toggleDarkMode"
         @refresh-page="refreshPage"
@@ -37,7 +40,7 @@ const app = Vue.createApp({
           @assets-uploaded="refreshAssetsFromSidebar"
           ref="sidebar"
         ></sidebar>
-        <main class="main-content" :class="{ 'sidebar-collapsed': sidebarCollapsed, 'snippets-full': isSnippetsRoute, 'wiki-edit-full': mode === 'edit' }" :style="(isAssetsRoute || isSnippetsRoute || isDrawingsRoute || mode === 'edit') ? 'max-width: none' : ''">
+        <main class="main-content" :class="{ 'sidebar-collapsed': sidebarCollapsed, 'snippets-full': isSnippetsRoute, 'drawings-full': isDrawingsRoute, 'wiki-edit-full': mode === 'edit' }" :style="(isAssetsRoute || isSnippetsRoute || isDrawingsRoute || mode === 'edit') ? 'max-width: none' : ''">
           <template v-if="isAssetsRoute">
             <asset-manager
               ref="assetManager"
@@ -60,7 +63,10 @@ const app = Vue.createApp({
               ref="drawingManager"
               :drawings-folder-id="drawingsFolderId"
               :drawing-id="selectedDrawingId"
+              :dark-mode="darkMode"
               @toast="showToast"
+              @drawing-selected="onDrawingSelected"
+              @refresh-drawings="refreshDrawings"
             ></drawing-manager>
           </template>
           <template v-else-if="mode === 'edit'">
@@ -146,6 +152,8 @@ const app = Vue.createApp({
       isDrawingsRoute: false,
       drawingsFolderId: null,
       selectedDrawingId: null,
+      selectedDrawingName: '',
+      pendingNewDrawing: false,
       sidebarCollapsed: false,
       darkMode: false,
       pendingExpandPath: null,
@@ -237,9 +245,14 @@ const app = Vue.createApp({
 
         const segments = this.currentPath.split('/');
         this.selectedDrawingId = segments.length > 1 ? segments[1] : null;
+        this.selectedDrawingName = '';
 
         try {
           this.drawingsFolderId = await DriveService.getDrawingsFolderId();
+          if (this.pendingNewDrawing) {
+            this.pendingNewDrawing = false;
+            this.$nextTick(() => this.$refs.drawingManager?.createNewDrawing());
+          }
         } catch (e) {
           this.showToast('Failed to load drawings: ' + e.message, 'error');
         }
@@ -255,6 +268,7 @@ const app = Vue.createApp({
       this.selectedSnippetId = null;
       this.selectedSnippetName = '';
       this.selectedDrawingId = null;
+      this.selectedDrawingName = '';
 
       try {
         this.resolved = await DriveService.resolvePath(this.currentPath);
@@ -371,6 +385,14 @@ const app = Vue.createApp({
       this.selectedSnippetName = snippet?.name || '';
     },
 
+    onDrawingSelected(drawing) {
+      this.selectedDrawingName = drawing?.name ? drawing.name.replace(/\.excalidraw$/, '') : '';
+    },
+
+    refreshDrawings() {
+      this.refreshSidebar();
+    },
+
     createSnippetFromHeader() {
       if (!this.isSnippetsRoute) {
         window.location.hash = '#/_snippets';
@@ -378,6 +400,15 @@ const app = Vue.createApp({
         return;
       }
       this.$nextTick(() => this.$refs.snippetManager?.createNewSnippet());
+    },
+
+    createDrawingFromHeader() {
+      if (!this.isDrawingsRoute) {
+        window.location.hash = '#/_drawings';
+        this.pendingNewDrawing = true;
+        return;
+      }
+      this.$nextTick(() => this.$refs.drawingManager?.createNewDrawing());
     },
 
     async deletePage() {

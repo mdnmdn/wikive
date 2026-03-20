@@ -245,15 +245,36 @@ const DriveService = {
     return data;
   },
 
-  async updateFile(fileId, content) {
-    const res = await this._fetch(
-      `${CONFIG.DRIVE_UPLOAD_API}/files/${fileId}?uploadType=media`,
-      {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'text/markdown' },
-        body: content,
-      }
-    );
+  async updateFile(fileId, content, metadata = null) {
+    let url = `${CONFIG.DRIVE_UPLOAD_API}/files/${fileId}`;
+    let options = {
+      method: 'PATCH',
+    };
+
+    if (metadata) {
+      // Multipart upload for metadata + content
+      url += '?uploadType=multipart';
+      const boundary = 'update_boundary_' + Date.now();
+      options.headers = { 'Content-Type': `multipart/related; boundary=${boundary}` };
+      options.body = [
+        `--${boundary}`,
+        'Content-Type: application/json; charset=UTF-8',
+        '',
+        JSON.stringify(metadata),
+        `--${boundary}`,
+        'Content-Type: text/markdown',
+        '',
+        content,
+        `--${boundary}--`,
+      ].join('\r\n');
+    } else {
+      // Media-only upload
+      url += '?uploadType=media';
+      options.headers = { 'Content-Type': 'text/markdown' };
+      options.body = content;
+    }
+
+    const res = await this._fetch(url, options);
 
     // Invalidate content cache
     CacheService.remove('content:' + fileId);
