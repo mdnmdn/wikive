@@ -9,6 +9,9 @@ const app = Vue.createApp({
         :user="user"
         :document="document"
         :dark-mode="darkMode"
+        :notifications="notifications"
+        :show-notifications="showNotifications"
+        :presence-users="presenceUsers"
         @edit="startEdit"
         @save="save"
         @cancel="cancelEdit"
@@ -20,6 +23,9 @@ const app = Vue.createApp({
         @refresh-page="refreshPage"
         @rename-move="showRenameMoveDialog"
         @clone="cloneDocument"
+        @toggle-notifications="showNotifications = !showNotifications"
+        @clear-notifications="notifications = []; showNotifications = false"
+        @navigate="onNavigate"
       ></app-header>
       <div class="app-body">
         <sidebar
@@ -152,6 +158,9 @@ const app = Vue.createApp({
       showRenameMove: false,
       renameMoveValue: '',
       renamingMoving: false,
+      notifications: [],
+      presenceUsers: [],
+      showNotifications: false,
     };
   },
   computed: {
@@ -195,6 +204,38 @@ const app = Vue.createApp({
     async initApp() {
       try {
         this.rootId = await DriveService.getRootFolderId();
+
+        // Load and connect real-time notifications only when WORKER_URL is configured
+        if (CONFIG.WORKER_URL) {
+          await new Promise((resolve) => {
+            const s = document.createElement('script');
+            s.src = 'js/services/realtime.js';
+            s.onload = resolve;
+            s.onerror = resolve; // fail gracefully
+            document.head.appendChild(s);
+          });
+        }
+
+        if (typeof RealtimeService !== 'undefined' && CONFIG.WORKER_URL) {
+          RealtimeService.onNotification((msg) => {
+            this.notifications.unshift(msg);
+            if (this.notifications.length > 50) this.notifications.length = 50;
+            const action = msg.action === 'save' ? 'updated' : msg.action === 'create' ? 'created' : 'deleted';
+            this.showToast(`${msg.user.name} ${action} ${msg.path}`, 'info');
+            // Auto-refresh if viewing the same page
+            if (msg.path === this.currentPath) {
+              this.refreshPage();
+            }
+          });
+          RealtimeService.onPresence((users) => {
+            // Exclude self
+            this.presenceUsers = users.filter(u => u.email !== this.user?.email);
+          });
+          // Use the Drive folder ID (not the name) as the room key — globally unique,
+          // so two unrelated users with the same ROOT_FOLDER_NAME never share a room.
+          RealtimeService.connect(CONFIG.WORKER_URL, this.rootId, this.user);
+        }
+
         this.onRouteChange();
       } catch (e) {
         this.showToast('Failed to initialize: ' + e.message, 'error');
@@ -212,6 +253,9 @@ const app = Vue.createApp({
       this.currentPath = hash.startsWith('/') ? hash.slice(1) : hash;
 
       this.loading = true;
+
+      // Notify presence of current path
+      if (typeof RealtimeService !== 'undefined') RealtimeService.navigate(this.currentPath);
 
       try {
         const specialFolder = DocumentService.getSpecialFolder(this.currentPath);
@@ -359,6 +403,7 @@ const app = Vue.createApp({
         if (this.document && this.document.type === 'file') {
           await DriveService.updateFile(this.document.id, content);
           this.showToast('Saved', 'success');
+          if (typeof RealtimeService !== 'undefined') RealtimeService.notifyUpdate('save', this.currentPath, this.document.docType);
         }
         this.fileContent = content;
         this.mode = 'view';
@@ -377,6 +422,7 @@ const app = Vue.createApp({
       if (this.document?.parentId) {
         CacheService.remove('listing:' + this.document.parentId);
       }
+      if (typeof RealtimeService !== 'undefined') RealtimeService.notifyUpdate('save', this.currentPath, this.document?.docType);
       this.refreshSidebar();
       // Drawings stay in edit mode — don't reload the route (would remount Excalidraw).
       // Just patch the document name in place if it changed.
@@ -407,6 +453,7 @@ const app = Vue.createApp({
         }
         const initialContent = '# ' + fileName.replace(/\.md$/, '') + '\n\nStart writing here...\n';
         await DriveService.createFile(fileName, parentId, initialContent);
+        if (typeof RealtimeService !== 'undefined') RealtimeService.notifyUpdate('create', path, 'markdown');
         this.showToast('Page created', 'success');
         this.showNewPage = false;
         this.newPagePath = '';
@@ -473,6 +520,7 @@ const app = Vue.createApp({
       } catch { return; } // user cancelled
       try {
         await DriveService.deleteFile(this.document.id, this.document.parentId);
+        if (typeof RealtimeService !== 'undefined') RealtimeService.notifyUpdate('delete', this.currentPath, this.document.docType);
         CacheService.remove('content:' + this.document.id);
         CacheService.remove('path:' + this.currentPath);
         this.showToast('Deleted', 'success');

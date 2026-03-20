@@ -1,0 +1,17 @@
+name = "wiki-realtime"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+[durable_objects]
+bindings = [
+  { name = "WIKI_ROOM", class_name = "WikiRoom" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["WikiRoom"]
+
+# GOOGLE_CLIENT_ID is set as a secret (never in plain text here):
+#   npx wrangler secret put GOOGLE_CLIENT_ID
+# It must match the OAuth client ID in config.js exactly.
+# Tokens issued to a different client ID will be rejected (401).

@@ -20,4 +20,9 @@ const CONFIG = {
 
   // OAuth scope - only files created by this app
   SCOPE: "https://www.googleapis.com/auth/drive.file",
+
+  // Cloudflare Worker URL for real-time notifications and presence.
+  // Deploy the worker from /worker and set the URL here.
+  // Leave empty to disable real-time features.
+  WORKER_URL: "",
 };
