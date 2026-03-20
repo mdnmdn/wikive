@@ -7,6 +7,7 @@ import excalidrawStyles from '@excalidraw/excalidraw/index.css?inline';
 class ExcalidrawWebComponent extends HTMLElement {
   private root: Root | null = null;
   private wrapperRef = React.createRef<any>();
+  private _pendingLoad: string | null = null;
 
   constructor() {
     super();
@@ -47,6 +48,7 @@ class ExcalidrawWebComponent extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this._pendingLoad = null;
     if (this.root) {
       this.root.unmount();
       this.root = null;
@@ -59,7 +61,24 @@ class ExcalidrawWebComponent extends HTMLElement {
   }
 
   public load(json: string) {
-    this.wrapperRef.current?.load(json);
+    if (this.wrapperRef.current) {
+      this.wrapperRef.current.load(json);
+    } else {
+      // React hasn't committed yet — store and retry each animation frame
+      this._pendingLoad = json;
+      requestAnimationFrame(() => this._retryLoad());
+    }
+  }
+
+  private _retryLoad() {
+    if (this._pendingLoad === null) return;
+    if (this.wrapperRef.current) {
+      const json = this._pendingLoad;
+      this._pendingLoad = null;
+      this.wrapperRef.current.load(json);
+    } else {
+      requestAnimationFrame(() => this._retryLoad());
+    }
   }
 
   public async exportPng(opts?: any) {

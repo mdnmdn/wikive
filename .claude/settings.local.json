@@ -4,7 +4,9 @@
       "WebFetch(domain:developers.google.com)",
       "WebSearch",
       "Bash(find:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(cd:*)",
+      "Bash(pnpm build:*)"
     ]
   }
 }

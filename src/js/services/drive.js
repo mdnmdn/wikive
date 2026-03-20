@@ -446,6 +446,54 @@ const DriveService = {
     CacheService.remove('content:' + fileId);
   },
 
+  // Filters expired snippets out of a listing and deletes them in the background.
+  // Returns only the non-expired items synchronously.
+  purgeExpiredSnippets(items, parentId) {
+    const now = Date.now();
+    const expired = items.filter(item => {
+      if (item.isFolder) return false;
+      const ts = item.appProperties?.expiryTs ? parseInt(item.appProperties.expiryTs) : 0;
+      return ts > 0 && ts < now;
+    });
+    if (expired.length > 0) {
+      Promise.all(expired.map(item => this.deleteFile(item.id, parentId).catch(() => {}))).catch(() => {});
+    }
+    return expired.length > 0 ? items.filter(i => !expired.includes(i)) : items;
+  },
+
+  async moveFile(fileId, newName, oldParentId, newParentId) {
+    let url = `${CONFIG.DRIVE_API}/files/${fileId}`;
+    const params = [];
+    if (newParentId !== oldParentId) {
+      params.push(`addParents=${newParentId}`);
+      if (oldParentId) params.push(`removeParents=${oldParentId}`);
+    }
+    if (params.length) url += '?' + params.join('&');
+
+    const res = await this._fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName }),
+    });
+
+    CacheService.remove('listing:' + oldParentId);
+    if (newParentId !== oldParentId) CacheService.remove('listing:' + newParentId);
+    CacheService.remove('content:' + fileId);
+
+    return await res.json();
+  },
+
+  async copyFile(fileId, name, parentId) {
+    const res = await this._fetch(`${CONFIG.DRIVE_API}/files/${fileId}/copy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, parents: [parentId] }),
+    });
+    const data = await res.json();
+    CacheService.remove('listing:' + parentId);
+    return data;
+  },
+
   async getFileMetadata(fileId) {
     const res = await this._fetch(
       `${CONFIG.DRIVE_API}/files/${fileId}?fields=id,name,mimeType,size,modifiedTime,appProperties,createdTime`

@@ -18,6 +18,8 @@ const app = Vue.createApp({
         @delete-page="deleteDocument"
         @toggle-dark="toggleDarkMode"
         @refresh-page="refreshPage"
+        @rename-move="showRenameMoveDialog"
+        @clone="cloneDocument"
       ></app-header>
       <div class="app-body">
         <sidebar
@@ -87,6 +89,31 @@ const app = Vue.createApp({
           </div>
         </div>
       </div>
+      <!-- Rename/Move dialog -->
+      <div v-if="showRenameMove" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="!renamingMoving && (showRenameMove = false)">
+        <div class="rounded-xl shadow-xl p-6 w-full max-w-md mx-4" style="background-color: hsl(var(--background)); color: hsl(var(--foreground))">
+          <h3 class="text-lg font-semibold mb-4">Rename / Move Page</h3>
+          <input
+            v-model="renameMoveValue"
+            @keyup.enter="!renamingMoving && renameMovePage(renameMoveValue)"
+            :disabled="renamingMoving"
+            class="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+            style="border-color: hsl(var(--border)); color: hsl(var(--foreground)); background-color: hsl(var(--background))"
+            ref="renameMoveInput"
+          />
+          <p class="text-xs mt-2" style="color: hsl(var(--muted-foreground))">Use / to move to a different folder. Folders are created automatically.</p>
+          <div class="flex justify-end gap-2 mt-4">
+            <button @click="showRenameMove = false" :disabled="renamingMoving" class="px-4 py-2 text-sm rounded-lg border hover:opacity-80 disabled:opacity-50" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))">Cancel</button>
+            <button @click="renameMovePage(renameMoveValue)" :disabled="renamingMoving" class="px-4 py-2 text-sm rounded-lg flex items-center gap-2 disabled:opacity-50" style="background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground))">
+              <template v-if="renamingMoving">
+                <div class="spinner" style="border-color: hsl(var(--primary-foreground) / 0.3); border-top-color: hsl(var(--primary-foreground)); width: 1rem; height: 1rem; border-width: 1px"></div>
+                <span>Saving…</span>
+              </template>
+              <template v-else><span>Save</span></template>
+            </button>
+          </div>
+        </div>
+      </div>
       <!-- Confirm dialog (replaces native confirm()) -->
       <div v-if="confirmDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="confirmDialog.reject()">
         <div class="rounded-xl shadow-xl p-6 w-full max-w-sm mx-4" style="background-color: hsl(var(--background)); color: hsl(var(--foreground))">
@@ -122,6 +149,9 @@ const app = Vue.createApp({
       pendingNewSnippet: false,
       pendingNewDrawing: false,
       confirmDialog: null,
+      showRenameMove: false,
+      renameMoveValue: '',
+      renamingMoving: false,
     };
   },
   computed: {
@@ -196,6 +226,11 @@ const app = Vue.createApp({
         if (this.pendingEditPath && this.currentPath === this.pendingEditPath && this.document?.type === 'file') {
           this.mode = 'edit';
           this.pendingEditPath = null;
+        }
+
+        // Drawings are always in edit mode
+        if (this.document?.docType === 'drawing') {
+          this.mode = 'edit';
         }
 
         // Open blank new snippet in edit mode
@@ -338,7 +373,19 @@ const app = Vue.createApp({
 
     onRendererSave(data) {
       // Renderer handled its own save (snippets, drawings)
+      // Clear parent listing cache so renames show immediately in the sidebar
+      if (this.document?.parentId) {
+        CacheService.remove('listing:' + this.document.parentId);
+      }
       this.refreshSidebar();
+      // Drawings stay in edit mode — don't reload the route (would remount Excalidraw).
+      // Just patch the document name in place if it changed.
+      if (this.document?.docType === 'drawing') {
+        if (data?.name && this.document.name !== data.name) {
+          this.document = { ...this.document, name: data.name };
+        }
+        return;
+      }
       this.onRouteChange();
     },
 
@@ -439,16 +486,16 @@ const app = Vue.createApp({
 
     refreshSidebar(expandPath = null) {
       this.pendingExpandPath = expandPath;
-      const id = this.rootId;
-      this.rootId = null;
-      this.$nextTick(() => { this.rootId = id; });
+      this.$refs.sidebar?.refresh();
     },
 
     refreshPage() {
       if (this.document && this.document.id) {
         CacheService.remove('content:' + this.document.id);
         CacheService.remove('path:' + this.currentPath);
+        if (this.document.parentId) CacheService.remove('listing:' + this.document.parentId);
       }
+      this.refreshSidebar();
       this.onRouteChange();
     },
 
@@ -489,6 +536,7 @@ const app = Vue.createApp({
     handleKeyDown(e) {
       if (e.key === 'Escape') {
         if (this.confirmDialog) { this.confirmDialog.reject(); return; }
+        if (this.showRenameMove) { if (!this.renamingMoving) this.showRenameMove = false; return; }
         if (this.showNewPage) { if (!this.creatingPage) this.showNewPage = false; return; }
         if (this.mode === 'edit') { this.cancelEdit(); return; }
       }
@@ -510,6 +558,73 @@ const app = Vue.createApp({
         } catch { return; }
       }
       this.mode = 'view';
+    },
+
+    showRenameMoveDialog() {
+      this.renameMoveValue = this.currentPath;
+      this.showRenameMove = true;
+      this.$nextTick(() => {
+        const el = this.$refs.renameMoveInput;
+        if (el) { el.focus(); el.select(); }
+      });
+    },
+
+    async renameMovePage(newPath) {
+      newPath = (newPath || '').trim();
+      if (!newPath || newPath === this.currentPath) { this.showRenameMove = false; return; }
+      this.renamingMoving = true;
+      try {
+        const segments = newPath.split('/').filter(Boolean);
+        const newFileName = segments.pop() + '.md';
+        let newParentId;
+        if (segments.length > 0) {
+          newParentId = await DriveService.createFolderPath(segments.join('/'));
+        } else {
+          newParentId = await DriveService.getRootFolderId();
+        }
+        await DriveService.moveFile(this.document.id, newFileName, this.document.parentId, newParentId);
+        CacheService.remove('path:' + this.currentPath);
+        this.showToast('Page moved', 'success');
+        this.showRenameMove = false;
+        this.refreshSidebar(newPath);
+        window.location.hash = '#/' + newPath;
+      } catch (e) {
+        this.showToast('Failed: ' + e.message, 'error');
+      }
+      this.renamingMoving = false;
+    },
+
+    async cloneDocument() {
+      const doc = this.document;
+      if (!doc?.id) return;
+      try {
+        if (doc.docType === 'markdown') {
+          const baseName = doc.name.replace(/\.md$/, '');
+          const data = await DriveService.copyFile(doc.id, baseName + '-copy.md', doc.parentId);
+          const pathSegs = this.currentPath.split('/');
+          pathSegs[pathSegs.length - 1] = baseName + '-copy';
+          const newPath = pathSegs.join('/');
+          this.showToast('Page cloned', 'success');
+          this.pendingEditPath = newPath;
+          this.refreshSidebar(newPath);
+          window.location.hash = '#/' + newPath;
+        } else if (doc.docType === 'snippet') {
+          const data = await DriveService.copyFile(doc.id, 'Copy of ' + doc.name, doc.parentId);
+          this.showToast('Snippet cloned', 'success');
+          CacheService.remove('listing:' + doc.parentId);
+          this.refreshSidebar();
+          window.location.hash = '#/_snippets/' + data.id;
+        } else if (doc.docType === 'drawing') {
+          const baseName = doc.name.replace(/\.excalidraw$/, '');
+          const data = await DriveService.copyFile(doc.id, baseName + '-copy.excalidraw', doc.parentId);
+          this.showToast('Drawing cloned', 'success');
+          CacheService.remove('listing:' + doc.parentId);
+          this.refreshSidebar();
+          window.location.hash = '#/_drawings/' + data.id;
+        }
+      } catch (e) {
+        this.showToast('Failed to clone: ' + e.message, 'error');
+      }
     },
 
     showToast(message, type = 'info') {

@@ -133,7 +133,8 @@ const FolderViewer = {
       this.defaultPageContent = null;
       this.defaultPageId = null;
       try {
-        const items = await DriveService.listFolder(this.document.id);
+        let items = await DriveService.listFolder(this.document.id);
+        if (this.isSnippetsFolder) items = DriveService.purgeExpiredSnippets(items, this.document.id);
         this.folderItems = items;
 
         // Check for home.md or index.md

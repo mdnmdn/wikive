@@ -34,11 +34,12 @@ const SidebarTree = {
           :expand-path="expandPath"
           :search-query="searchQuery"
           :perspective="perspective"
+          :refresh-key="refreshKey"
         ></sidebar-tree>
       </div>
     </div>
   `,
-  props: ['folderId', 'basePath', 'currentPath', 'expandPath', 'searchQuery', 'perspective'],
+  props: ['folderId', 'basePath', 'currentPath', 'expandPath', 'searchQuery', 'perspective', 'refreshKey'],
   data() {
     return { items: [], loading: false, expanded: {} };
   },
@@ -72,13 +73,15 @@ const SidebarTree = {
   watch: {
     folderId() { this.loadItems(); },
     perspective() { this.loadItems(); },
+    refreshKey() { this.loadItems(); },
   },
   methods: {
     async loadItems() {
       if (!this.folderId) return;
       this.loading = true;
       try {
-        const all = await DriveService.listFolder(this.folderId);
+        let all = await DriveService.listFolder(this.folderId);
+        all = DriveService.purgeExpiredSnippets(all, this.folderId);
         // At root level, show special folders; deduplicate folder+file with same base name
         const deduped = {};
         for (const item of all) {
@@ -178,18 +181,15 @@ const Sidebar = {
         </button>
       </div>
 
-      <!-- Search & Refresh -->
+      <!-- Search -->
       <div v-if="!isCollapsed" class="p-3 pb-2">
-        <div class="flex items-center gap-2">
-          <input
-            v-model="searchQuery"
-            type="text"
-            :placeholder="'Search ' + perspective + '...'"
-            class="flex-1 px-2 py-1 text-xs rounded border bg-background"
-            style="border-color: hsl(var(--border))"
-          />
-          <button @click="$emit('refresh')" class="p-1 opacity-50 hover:opacity-100"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg></button>
-        </div>
+        <input
+          v-model="searchQuery"
+          type="text"
+          :placeholder="'Search ' + perspective + '...'"
+          class="w-full px-2 py-1 text-xs rounded border bg-background"
+          style="border-color: hsl(var(--border))"
+        />
       </div>
 
       <!-- Unified Tree -->
@@ -202,6 +202,7 @@ const Sidebar = {
           :expand-path="expandPath"
           :search-query="searchQuery"
           :perspective="perspective"
+          :refresh-key="refreshKey"
         ></sidebar-tree>
       </div>
 
@@ -242,12 +243,14 @@ const Sidebar = {
     return {
       searchQuery: '',
       perspective: 'all',
+      refreshKey: 0,
       assetDragging: false,
       assetUploading: false,
       assetUploadCount: 0,
     };
   },
   methods: {
+    refresh() { this.refreshKey++; },
     setPerspective(p) {
       this.perspective = p;
       // Navigate to the matching route
