@@ -55,30 +55,18 @@ const DrawingEditor = {
     },
     async saveDrawing() {
       const jsonContent = this.getContent();
-      const name = (this.editName || 'Untitled').trim() + '.excalidraw';
+      const name = (this.editName || 'Untitled').trim();
       this.saving = true;
       try {
         if (this.document?.id) {
-          await DriveService.updateFile(this.document.id, jsonContent, { name });
+          await DriveService.updateFile(this.document.id, jsonContent, { name: name + '.excalidraw' });
           this.$emit('toast', 'Drawing saved', 'success');
-          this.$emit('save', { name });
+          this.$emit('save', { name: name + '.excalidraw' });
         } else {
           const folderId = await DriveService.getDrawingsFolderId();
-          const metadata = { name, parents: [folderId], mimeType: 'application/json' };
-          const boundary = 'wiki_boundary_' + Date.now();
-          const body = [
-            '--' + boundary, 'Content-Type: application/json; charset=UTF-8', '', JSON.stringify(metadata),
-            '--' + boundary, 'Content-Type: application/json', '', jsonContent,
-            '--' + boundary + '--',
-          ].join('\r\n');
-          const res = await DriveService._fetch(CONFIG.DRIVE_UPLOAD_API + '/files?uploadType=multipart', {
-            method: 'POST',
-            headers: { 'Content-Type': 'multipart/related; boundary=' + boundary },
-            body,
-          });
-          const data = await res.json();
+          const data = await DriveService.createDrawing(name, jsonContent, folderId);
           this.$emit('toast', 'Drawing created', 'success');
-          this.$emit('save', { id: data.id, name });
+          this.$emit('save', { id: data.id, name: name + '.excalidraw' });
           window.location.hash = '#/_drawings/' + data.id;
         }
       } catch (e) {

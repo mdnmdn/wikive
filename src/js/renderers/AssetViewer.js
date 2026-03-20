@@ -1,14 +1,14 @@
 const AssetViewer = {
   template: `
-    <div class="asset-manager">
+    <div class="asset-manager px-10 py-8">
       <div class="flex items-start justify-between mb-4">
         <div>
           <h1 class="text-2xl font-bold" style="color: hsl(var(--foreground))">Assets</h1>
-          <nav class="flex items-center gap-1 text-sm text-slate-500 mt-1" v-if="folderStack.length > 0">
-            <a href="#" @click.prevent="navigateToRoot" class="hover:text-slate-800">_assets</a>
+          <nav class="flex items-center gap-1 text-sm mt-1" style="color: hsl(var(--muted-foreground))" v-if="folderStack.length > 0">
+            <a href="#" @click.prevent="navigateToRoot" class="hover:opacity-80">_assets</a>
             <template v-for="(f, i) in folderStack" :key="f.id">
-              <span class="text-slate-300">/</span>
-              <a href="#" @click.prevent="navigateToFolder(i)" class="hover:text-slate-800">{{ f.name }}</a>
+              <span class="opacity-40">/</span>
+              <a href="#" @click.prevent="navigateToFolder(i)" class="hover:opacity-80">{{ f.name }}</a>
             </template>
           </nav>
         </div>
@@ -30,11 +30,13 @@ const AssetViewer = {
       <div v-if="loading" class="flex justify-center py-8"><div class="spinner"></div></div>
       <div v-else-if="items.length === 0" class="text-center py-8" style="color: hsl(var(--muted-foreground))">No assets yet. Upload files to get started.</div>
       <div v-else-if="filteredItems.length === 0" class="text-center py-8" style="color: hsl(var(--muted-foreground))">No assets match your search.</div>
-      <div v-else class="asset-grid">
-        <div v-for="item in filteredItems" :key="item.id" class="asset-card" :class="{ 'asset-card-folder': item.isFolder }">
+      <div v-else class="doc-grid">
+
+        <!-- Folder card -->
+        <div v-for="item in filteredItems" :key="item.id" class="doc-card">
           <template v-if="item.isFolder">
-            <div class="asset-preview cursor-pointer" @click="openFolder(item)">
-              <svg class="w-12 h-12 text-slate-300" fill="currentColor" viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+            <div class="doc-card-preview cursor-pointer" @click="openFolder(item)">
+              <svg class="w-12 h-12" style="color: hsl(var(--border))" fill="currentColor" viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
             </div>
             <div class="asset-info">
               <div class="asset-name" :title="item.name">{{ item.name }}</div>
@@ -44,13 +46,11 @@ const AssetViewer = {
               </div>
             </div>
           </template>
-          <template v-else>
-            <div class="asset-preview cursor-pointer" @click="previewItem(item)">
-              <img v-if="isImage(item)" :src="thumbnailUrl(item)" class="asset-thumb" @error="$event.target.style.display='none'" />
-              <div v-else class="flex flex-col items-center gap-1">
-                <svg class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-                <span class="text-xs text-slate-400">{{ fileExt(item) }}</span>
-              </div>
+
+          <!-- Image card — thumbnail on top -->
+          <template v-else-if="isImage(item)">
+            <div class="doc-card-preview cursor-pointer" @click="previewItem(item)">
+              <img :src="thumbnailUrl(item)" class="asset-thumb" @error="$event.target.style.display='none'" />
             </div>
             <div class="asset-info">
               <div class="asset-name" :title="item.name">{{ item.name }}</div>
@@ -63,7 +63,28 @@ const AssetViewer = {
               <div class="asset-wiki-path" @click="copyWikiPath(item)" title="Click to copy">{{ wikiPath(item) }}</div>
             </div>
           </template>
+
+          <!-- Non-image file card — icon layout matching folder cards -->
+          <template v-else>
+            <div class="p-4 cursor-pointer" @click="previewItem(item)">
+              <div class="flex items-center gap-3 mb-2">
+                <svg class="w-5 h-5 flex-shrink-0" style="color: hsl(var(--primary))" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                <span class="font-medium text-sm truncate" :title="item.name">{{ item.name }}</span>
+              </div>
+              <div class="text-xs font-mono" style="color: hsl(var(--muted-foreground))">{{ fileExt(item) }}</div>
+            </div>
+            <div class="asset-info" style="border-top: 1px solid hsl(var(--border))">
+              <div class="asset-actions">
+                <button @click="copyWikiPath(item)" class="asset-btn" title="Copy wiki path"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg></button>
+                <button @click="downloadItem(item)" class="asset-btn" title="Download"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                <button @click="renameItem(item)" class="asset-btn" title="Rename"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>
+                <button @click="deleteItem(item)" class="asset-btn asset-btn-danger" title="Delete"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+              </div>
+              <div class="asset-wiki-path" @click="copyWikiPath(item)" title="Click to copy">{{ wikiPath(item) }}</div>
+            </div>
+          </template>
         </div>
+
       </div>
       <!-- Preview modal -->
       <div v-if="previewing" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" @click.self="previewing = null">
@@ -99,14 +120,14 @@ const AssetViewer = {
           </div>
         </div>
       </div>
-      <!-- Rename dialog -->
+      <!-- Rename / New Folder dialog -->
       <div v-if="renaming" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="renaming = null">
         <div class="rounded-xl shadow-xl p-6 w-full max-w-sm mx-4" style="background-color: hsl(var(--background)); color: hsl(var(--foreground))">
-          <h3 class="text-lg font-semibold mb-4">Rename</h3>
+          <h3 class="text-lg font-semibold mb-4">{{ renaming._newFolder ? 'New Folder' : 'Rename' }}</h3>
           <input v-model="renameValue" @keyup.enter="confirmRename" class="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2" style="border-color: hsl(var(--border)); background-color: hsl(var(--background)); color: hsl(var(--foreground))" ref="renameInput" />
           <div class="flex justify-end gap-2 mt-4">
             <button @click="renaming = null" class="px-4 py-2 text-sm rounded-lg border hover:opacity-80" style="border-color: hsl(var(--border))">Cancel</button>
-            <button @click="confirmRename" class="px-4 py-2 text-sm rounded-lg" style="background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground))">Rename</button>
+            <button @click="confirmRename" class="px-4 py-2 text-sm rounded-lg" style="background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground))">{{ renaming._newFolder ? 'Create' : 'Rename' }}</button>
           </div>
         </div>
       </div>
@@ -144,10 +165,10 @@ const AssetViewer = {
     document: {
       async handler(doc) {
         if (!doc) return;
-        // For asset viewer, the document is the _assets folder or a subfolder
+        // For asset viewer, the document is always the _assets folder (or a subfolder)
+        // doc.type === 'folder' means it IS the folder; 'file' means a specific asset was linked
         let folderId = doc.id;
-        if (doc.docType !== 'folder') {
-          // If we navigated to a specific asset file, use parent
+        if (doc.type !== 'folder') {
           folderId = doc.parentId;
         }
         if (folderId) {
@@ -207,10 +228,10 @@ const AssetViewer = {
     openFolder(item) { this.folderStack.push({ id: item.id, name: item.name }); this.currentFolderId = item.id; this.loadItems(); },
     navigateToRoot() { this.folderStack = []; this.currentFolderId = this.document?.id || this.document?.parentId; this.loadItems(); },
     navigateToFolder(index) { this.folderStack = this.folderStack.slice(0, index + 1); this.currentFolderId = this.folderStack[index].id; this.loadItems(); },
-    async createSubfolder() {
-      const name = prompt('Folder name:'); if (!name) return;
-      try { await DriveService._createFolder(name, this.currentFolderId); CacheService.remove('listing:' + this.currentFolderId); await this.loadItems(); this.$emit('toast', 'Folder created', 'success'); }
-      catch (e) { this.$emit('toast', 'Failed: ' + e.message, 'error'); }
+    createSubfolder() {
+      this.renaming = { _newFolder: true };
+      this.renameValue = '';
+      this.$nextTick(() => this.$refs.renameInput?.focus());
     },
     isImage(item) { return /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i.test(item.name); },
     isVideo(item) { return /\.(mp4|webm|ogg|mov|avi)$/i.test(item.name); },
@@ -260,6 +281,11 @@ const AssetViewer = {
     async confirmRename() {
       if (!this.renaming || !this.renameValue.trim()) return;
       const item = this.renaming; const newName = this.renameValue.trim(); this.renaming = null;
+      if (item._newFolder) {
+        try { await DriveService._createFolder(newName, this.currentFolderId); CacheService.remove('listing:' + this.currentFolderId); await this.loadItems(); this.$emit('toast', 'Folder created', 'success'); }
+        catch (e) { this.$emit('toast', 'Failed: ' + e.message, 'error'); }
+        return;
+      }
       if (newName === item.name) return;
       try { await DriveService.renameFile(item.id, newName, this.currentFolderId); this.$emit('toast', 'Renamed to ' + newName, 'success'); CacheService.remove('listing:' + this.currentFolderId); await this.loadItems(); }
       catch (e) { this.$emit('toast', 'Rename failed: ' + e.message, 'error'); }

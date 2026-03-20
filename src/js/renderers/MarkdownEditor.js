@@ -18,9 +18,10 @@ const MarkdownEditor = {
   methods: {
     initEditor() {
       const { Editor } = toastui;
+      const savedMode = localStorage.getItem('editorMode') || 'wysiwyg';
       this.editor = new Editor({
         el: this.$refs.editorEl,
-        initialEditType: 'wysiwyg',
+        initialEditType: savedMode,
         previewStyle: 'vertical',
         height: '100%',
         initialValue: this.content || '',
@@ -32,6 +33,9 @@ const MarkdownEditor = {
           ['table', 'link'],
           ['code', 'codeblock'],
         ],
+      });
+      this.editor.on('changeMode', (mode) => {
+        localStorage.setItem('editorMode', mode);
       });
     },
     getContent() {

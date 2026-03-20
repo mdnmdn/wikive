@@ -13,6 +13,8 @@ const DocumentRenderer = {
       @toast="(msg, type) => $emit('toast', msg, type)"
       @mode-change="$emit('mode-change', $event)"
       @navigate="$emit('navigate', $event)"
+      @create-snippet="$emit('create-snippet')"
+      @create-drawing="$emit('create-drawing')"
       ref="renderer"
     ></component>
     <div v-else class="flex items-center justify-center py-12 text-sm opacity-60">
@@ -20,7 +22,7 @@ const DocumentRenderer = {
     </div>
   `,
   props: ['document', 'content', 'mode', 'darkMode'],
-  emits: ['save', 'delete', 'toast', 'mode-change', 'navigate'],
+  emits: ['save', 'delete', 'toast', 'mode-change', 'navigate', 'create-snippet', 'create-drawing'],
   computed: {
     componentName() {
       if (!this.document) return null;

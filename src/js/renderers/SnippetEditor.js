@@ -67,17 +67,11 @@ const SnippetEditor = {
       <div ref="aceEditor" class="ace_editor"></div>
     </div>
   `,
+  mixins: [AceMixin],
   props: ['document', 'content', 'mode', 'darkMode'],
   emits: ['save', 'mode-change', 'toast'],
   data() {
-    return {
-      editor: null,
-      editName: '',
-      editType: 'markdown',
-      editExpiry: 1440,
-      saving: false,
-      _loadedModes: new Set(['markdown']),
-    };
+    return { editName: '', editType: 'markdown', editExpiry: 1440, saving: false };
   },
   watch: {
     document: {
@@ -90,52 +84,19 @@ const SnippetEditor = {
       },
       immediate: true,
     },
-    editType(t) { if (this.editor) this.setEditorMode(t); },
+    editType(t) { this._aceSetMode(t); },
   },
   mounted() {
-    this.darkModeObserver = new MutationObserver(() => this.updateEditorTheme());
-    this.darkModeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     this.$nextTick(() => {
-      this.ensureEditor();
-      this.editor.setValue(this.content || '', -1);
-      this.setEditorMode(this.editType);
-      this.editor.setReadOnly(false);
-      this.editor.focus();
+      this._aceEnsure(this.$refs.aceEditor);
+      this._aceEditor.setValue(this.content || '', -1);
+      this._aceSetMode(this.editType);
+      this._aceEditor.setReadOnly(false);
+      this._aceEditor.focus();
     });
   },
-  beforeUnmount() {
-    if (this.editor) { this.editor.destroy(); this.editor.container.remove(); }
-    if (this.darkModeObserver) this.darkModeObserver.disconnect();
-  },
   methods: {
-    ensureEditor() {
-      if (!this.$refs.aceEditor || this.editor) return;
-      this.editor = ace.edit(this.$refs.aceEditor);
-      this.updateEditorTheme();
-      this.editor.setOptions({ enableBasicAutocompletion: true, enableLiveAutocompletion: true });
-    },
-    async setEditorMode(mode) {
-      if (!this.editor) return;
-      const aceMode = mode === 'text' ? 'text' : mode;
-      if (aceMode !== 'text' && !this._loadedModes.has(aceMode)) {
-        try {
-          await new Promise((resolve, reject) => {
-            const s = document.createElement('script');
-            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/mode-' + aceMode + '.min.js';
-            s.onload = resolve; s.onerror = reject; document.head.appendChild(s);
-          });
-          this._loadedModes.add(aceMode);
-        } catch { this.editor.session.setMode('ace/mode/text'); return; }
-      }
-      this.editor.session.setMode('ace/mode/' + aceMode);
-    },
-    updateEditorTheme() {
-      if (!this.editor) return;
-      this.editor.setTheme(document.documentElement.classList.contains('dark') ? 'ace/theme/monokai' : 'ace/theme/github');
-    },
-    getContent() {
-      return this.editor ? this.editor.getValue() : this.content;
-    },
+    getContent() { return this._aceGetValue() || this.content; },
     async saveSnippet() {
       const content = this.getContent();
       this.saving = true;
@@ -160,7 +121,7 @@ const SnippetEditor = {
       if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.classList.contains('ace_text-input')) return;
       const text = e.clipboardData?.getData('text');
       if (text && !this.document?.id) {
-        this.editor?.setValue(text, -1);
+        this._aceEditor?.setValue(text, -1);
         this.editExpiry = 20;
       }
     },

@@ -1,6 +1,6 @@
 const FolderViewer = {
   template: `
-    <div>
+    <div class="px-10 py-8">
       <div v-if="loading" class="flex items-center justify-center py-12"><div class="spinner"></div></div>
       <!-- If folder has a default page (home.md / index.md), render it as markdown -->
       <template v-else-if="defaultPageContent !== null">
@@ -10,7 +10,18 @@ const FolderViewer = {
       <template v-else>
         <div class="flex items-center justify-between mb-6">
           <h1 class="text-2xl font-bold" style="color: hsl(var(--foreground))">{{ folderName }}</h1>
-          <button @click="createDefaultPage" :disabled="creatingPage" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md hover:opacity-90 transition-colors disabled:opacity-50" style="background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground))">
+          <!-- Snippet folder: + Snippet button -->
+          <button v-if="isSnippetsFolder" @click="$emit('create-snippet')" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md hover:opacity-90 transition-colors" style="background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground))">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            New Snippet
+          </button>
+          <!-- Drawings folder: + Drawing button -->
+          <button v-else-if="isDrawingsFolder" @click="$emit('create-drawing')" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md hover:opacity-90 transition-colors" style="background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground))">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            New Drawing
+          </button>
+          <!-- Regular wiki folder: Create Page button -->
+          <button v-else-if="!isSpecialFolder" @click="createDefaultPage" :disabled="creatingPage" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md hover:opacity-90 transition-colors disabled:opacity-50" style="background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground))">
             <template v-if="creatingPage">
               <div class="spinner" style="width:0.875rem;height:0.875rem;border-width:1px;border-color:hsl(var(--primary-foreground)/0.3);border-top-color:hsl(var(--primary-foreground))"></div>
               Creating…
@@ -21,32 +32,46 @@ const FolderViewer = {
             </template>
           </button>
         </div>
+
         <div v-if="folderItems.length === 0" class="text-center py-12" style="color: hsl(var(--muted-foreground))">
           <svg class="w-16 h-16 mx-auto mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
-          <p class="text-sm">This folder is empty.</p>
+          <p class="text-sm">{{ isSnippetsFolder ? 'No snippets yet.' : 'This folder is empty.' }}</p>
         </div>
-        <div v-else class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr))">
-          <a
-            v-for="item in folderItems"
-            :key="item.id"
-            :href="'#/' + itemPath(item)"
-            class="block border rounded-lg p-4 hover:shadow-md transition-shadow"
-            style="border-color: hsl(var(--border)); background-color: hsl(var(--background)); color: hsl(var(--foreground))"
-          >
-            <div class="flex items-center gap-3 mb-2">
-              <svg v-if="item.isFolder" class="w-6 h-6 flex-shrink-0" style="color: hsl(var(--primary))" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
-              <svg v-else-if="item.name.endsWith('.excalidraw')" class="w-6 h-6 flex-shrink-0" style="color: hsl(var(--primary))" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4h16v12H4zM8 20h8"/></svg>
-              <svg v-else class="w-6 h-6 flex-shrink-0" style="color: hsl(var(--primary))" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-              <span class="font-medium text-sm truncate">{{ displayName(item) }}</span>
-            </div>
-            <div v-if="item.modifiedTime" class="text-xs" style="color: hsl(var(--muted-foreground))">{{ formatDate(item.modifiedTime) }}</div>
-          </a>
+
+        <div v-else class="doc-grid">
+          <!-- Snippet card -->
+          <template v-if="isSnippetsFolder">
+            <a v-for="item in folderItems" :key="item.id" :href="'#/_snippets/' + item.id" class="doc-card block p-4">
+              <div class="flex items-center gap-2 mb-2">
+                <svg class="w-5 h-5 flex-shrink-0" style="color: hsl(var(--primary))" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+                <span class="font-medium text-sm truncate flex-1">{{ item.name }}</span>
+              </div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span v-if="item.appProperties?.type" class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded" style="background: hsl(var(--muted)); color: hsl(var(--muted-foreground))">{{ item.appProperties.type }}</span>
+                <span v-if="expiryLabel(item)" class="text-[10px] uppercase tracking-wide font-semibold" :class="isExpiringSoon(item) ? 'text-orange-500' : ''" style="color: hsl(var(--muted-foreground))">{{ expiryLabel(item) }}</span>
+                <span v-if="item.modifiedTime" class="text-xs ml-auto" style="color: hsl(var(--muted-foreground))">{{ formatDate(item.modifiedTime) }}</span>
+              </div>
+            </a>
+          </template>
+
+          <!-- Generic folder/drawing/markdown cards -->
+          <template v-else>
+            <a v-for="item in folderItems" :key="item.id" :href="'#/' + itemPath(item)" class="doc-card block p-4">
+              <div class="flex items-center gap-3 mb-2">
+                <svg v-if="item.isFolder" class="w-5 h-5 flex-shrink-0" style="color: hsl(var(--primary))" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                <svg v-else-if="item.name.endsWith('.excalidraw')" class="w-5 h-5 flex-shrink-0" style="color: hsl(var(--primary))" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4h16v12H4zM8 20h8"/></svg>
+                <svg v-else class="w-5 h-5 flex-shrink-0" style="color: hsl(var(--primary))" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <span class="font-medium text-sm truncate">{{ displayName(item) }}</span>
+              </div>
+              <div v-if="item.modifiedTime" class="text-xs" style="color: hsl(var(--muted-foreground))">{{ formatDate(item.modifiedTime) }}</div>
+            </a>
+          </template>
         </div>
       </template>
     </div>
   `,
   props: ['document', 'content', 'mode', 'darkMode'],
-  emits: ['navigate', 'toast'],
+  emits: ['navigate', 'toast', 'create-snippet', 'create-drawing'],
   data() {
     return {
       folderItems: [],
@@ -59,6 +84,9 @@ const FolderViewer = {
   },
   computed: {
     folderName() { return this.document?.name || 'Home'; },
+    isSnippetsFolder() { return this.document?.path === '_snippets'; },
+    isDrawingsFolder() { return this.document?.path === '_drawings'; },
+    isSpecialFolder() { return ['_snippets', '_drawings', '_assets'].includes(this.document?.path); },
   },
   watch: {
     document: { handler() { this.load(); }, immediate: true },
@@ -84,6 +112,21 @@ const FolderViewer = {
       if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
       return d.toLocaleDateString();
     },
+    expiryLabel(item) {
+      const ts = item.appProperties?.expiryTs ? parseInt(item.appProperties.expiryTs) : 0;
+      if (!ts) return '';
+      const diff = ts - Date.now();
+      if (diff <= 0) return 'Expired';
+      const m = Math.floor(diff / 60000);
+      if (m < 60) return m + 'm left';
+      const h = Math.floor(m / 60);
+      if (h < 24) return h + 'h left';
+      return Math.floor(h / 24) + 'd left';
+    },
+    isExpiringSoon(item) {
+      const ts = item.appProperties?.expiryTs ? parseInt(item.appProperties.expiryTs) : 0;
+      return ts && (ts - Date.now() < 3600000);
+    },
     async load() {
       if (!this.document?.id) return;
       this.loading = true;
@@ -98,49 +141,16 @@ const FolderViewer = {
         if (defaultFile) {
           this.defaultPageId = defaultFile.id;
           this.defaultPageContent = await DriveService.getFileContent(defaultFile.id);
-          this.renderedHtml = this.renderMarkdown(this.defaultPageContent);
+          this.renderedHtml = MarkdownService.render(this.defaultPageContent);
           this.$nextTick(() => {
-            this.renderMermaid();
-            this.interceptLinks();
+            MarkdownService.renderMermaid(this.$refs.mdContent);
+            MarkdownService.interceptLinks(this.$refs.mdContent, this.document?.path, (path) => this.$emit('navigate', path));
           });
         }
       } catch (e) {
         this.$emit('toast', 'Error: ' + e.message, 'error');
       }
       this.loading = false;
-    },
-    renderMarkdown(md) {
-      const renderer = new marked.Renderer();
-      renderer.code = function ({ text, lang }) {
-        if (lang === 'mermaid') return '<pre class="mermaid">' + text + '</pre>';
-        const highlighted = hljs.getLanguage(lang)
-          ? hljs.highlight(text, { language: lang }).value
-          : hljs.highlightAuto(text).value;
-        return '<pre><code class="hljs language-' + (lang || 'plaintext') + '">' + highlighted + '</code></pre>';
-      };
-      marked.setOptions({ renderer, gfm: true, breaks: false });
-      return marked.parse(md);
-    },
-    renderMermaid() {
-      const el = this.$refs.mdContent;
-      if (!el) return;
-      const nodes = el.querySelectorAll('.mermaid');
-      if (nodes.length > 0 && typeof mermaid !== 'undefined') mermaid.run({ nodes });
-    },
-    interceptLinks() {
-      const el = this.$refs.mdContent;
-      if (!el) return;
-      el.querySelectorAll('a').forEach(a => {
-        const href = a.getAttribute('href');
-        if (href && !href.startsWith('http') && !href.startsWith('#')) {
-          a.addEventListener('click', (e) => {
-            e.preventDefault();
-            const base = this.document?.path || '';
-            const resolved = base ? base + '/' + href : href;
-            this.$emit('navigate', resolved.replace(/\.md$/, ''));
-          });
-        }
-      });
     },
     async createDefaultPage() {
       if (!this.document?.id) return;

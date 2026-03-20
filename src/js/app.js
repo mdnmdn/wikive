@@ -31,7 +31,7 @@ const app = Vue.createApp({
           @assets-uploaded="onAssetsUploaded"
           ref="sidebar"
         ></sidebar>
-        <main class="main-content" :class="mainContentClass" :style="mainContentStyle">
+        <main class="main-content" :class="mainContentClass">
           <!-- Not found -->
           <template v-if="notFound">
             <page-not-found :path="currentPath" @create="createPage"></page-not-found>
@@ -49,6 +49,8 @@ const app = Vue.createApp({
               @toast="showToast"
               @mode-change="onModeChange"
               @navigate="onNavigate"
+              @create-snippet="createNewSnippet"
+              @create-drawing="createNewDrawing"
             ></document-renderer>
           </template>
           <!-- Loading -->
@@ -61,7 +63,7 @@ const app = Vue.createApp({
       <div v-if="toast" class="toast" :class="toast.type" @click="toast = null">{{ toast.message }}</div>
       <!-- New page dialog -->
       <div v-if="showNewPage" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="!creatingPage && (showNewPage = false)">
-        <div class="bg-background text-foreground rounded-xl shadow-xl p-6 w-full max-w-md mx-4" style="background-color: hsl(var(--background)); color: hsl(var(--foreground))">
+        <div class="rounded-xl shadow-xl p-6 w-full max-w-md mx-4" style="background-color: hsl(var(--background)); color: hsl(var(--foreground))">
           <h3 class="text-lg font-semibold mb-4">Create New Page</h3>
           <input
             v-model="newPagePath"
@@ -85,6 +87,17 @@ const app = Vue.createApp({
           </div>
         </div>
       </div>
+      <!-- Confirm dialog (replaces native confirm()) -->
+      <div v-if="confirmDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="confirmDialog.reject()">
+        <div class="rounded-xl shadow-xl p-6 w-full max-w-sm mx-4" style="background-color: hsl(var(--background)); color: hsl(var(--foreground))">
+          <h3 class="text-lg font-semibold mb-2">{{ confirmDialog.title }}</h3>
+          <p v-if="confirmDialog.message" class="text-sm mb-4" style="color: hsl(var(--muted-foreground))">{{ confirmDialog.message }}</p>
+          <div class="flex justify-end gap-2 mt-4">
+            <button @click="confirmDialog.reject()" class="px-4 py-2 text-sm rounded-lg border hover:opacity-80" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))">Cancel</button>
+            <button @click="confirmDialog.resolve()" class="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700">{{ confirmDialog.confirmLabel || 'Confirm' }}</button>
+          </div>
+        </div>
+      </div>
     </template>
   `,
   data() {
@@ -93,7 +106,7 @@ const app = Vue.createApp({
       user: null,
       rootId: null,
       currentPath: '',
-      document: null,        // unified Document object
+      document: null,
       fileContent: '',
       mode: 'view',
       loading: false,
@@ -106,24 +119,18 @@ const app = Vue.createApp({
       darkMode: false,
       pendingExpandPath: null,
       pendingEditPath: null,
+      pendingNewSnippet: false,
+      pendingNewDrawing: false,
+      confirmDialog: null,
     };
   },
   computed: {
     mainContentClass() {
       const dt = this.document?.docType;
       return {
-        'sidebar-collapsed': this.sidebarCollapsed,
         'snippets-full': dt === 'snippet',
         'drawings-full': dt === 'drawing',
-        'wiki-edit-full': this.mode === 'edit',
       };
-    },
-    mainContentStyle() {
-      const dt = this.document?.docType;
-      if (dt === 'asset' || dt === 'snippet' || dt === 'drawing' || this.mode === 'edit') {
-        return 'max-width: none';
-      }
-      return '';
     },
   },
   async mounted() {
@@ -138,10 +145,21 @@ const app = Vue.createApp({
     });
 
     window.addEventListener('hashchange', () => this.onRouteChange());
+    window.addEventListener('keydown', this._onKeyDown = (e) => this.handleKeyDown(e));
+    window.addEventListener('beforeunload', this._onBeforeUnload = (e) => {
+      if (this.mode === 'edit' && this.isDirty()) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
 
     if (typeof mermaid !== 'undefined') {
       mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
     }
+  },
+  unmounted() {
+    window.removeEventListener('keydown', this._onKeyDown);
+    window.removeEventListener('beforeunload', this._onBeforeUnload);
   },
   methods: {
     async initApp() {
@@ -179,6 +197,36 @@ const app = Vue.createApp({
           this.mode = 'edit';
           this.pendingEditPath = null;
         }
+
+        // Open blank new snippet in edit mode
+        if (this.pendingNewSnippet && this.currentPath === '_snippets') {
+          this.pendingNewSnippet = false;
+          const doc = DocumentService.toDocument(
+            { id: null, name: '', isFolder: false }, null, '_snippets'
+          );
+          doc.docType = 'snippet';
+          doc.type = 'file';
+          this.document = doc;
+          this.fileContent = '';
+          this.mode = 'edit';
+        }
+
+        // Open blank new drawing in edit mode
+        if (this.pendingNewDrawing && this.currentPath === '_drawings') {
+          this.pendingNewDrawing = false;
+          const folderId = await DriveService.getDrawingsFolderId();
+          const doc = DocumentService.toDocument(
+            { id: null, name: '', isFolder: false }, folderId, '_drawings'
+          );
+          doc.docType = 'drawing';
+          doc.type = 'file';
+          this.document = doc;
+          this.fileContent = JSON.stringify({
+            type: 'excalidraw', version: 2, source: 'google-wiki',
+            elements: [], appState: { theme: this.darkMode ? 'dark' : 'light' }, files: {},
+          });
+          this.mode = 'edit';
+        }
       } catch (e) {
         this.showToast('Error loading: ' + e.message, 'error');
       }
@@ -208,10 +256,8 @@ const app = Vue.createApp({
         if (specialFolder === 'assets') {
           this.document.docType = 'asset';
         } else if (specialFolder === 'snippets') {
-          // Show snippet empty state — docType is snippet but no content
-          this.document.docType = 'snippet';
-          this.document.type = 'file'; // trick to show SnippetViewer
-          this.document.id = null; // no specific snippet selected
+          // Show snippet list as a folder card grid (same as drawings)
+          this.document.docType = 'folder';
         } else if (specialFolder === 'drawings') {
           // Show drawing list — render as folder with drawing items
           this.document.docType = 'folder';
@@ -286,10 +332,6 @@ const app = Vue.createApp({
       }
     },
 
-    cancelEdit() {
-      this.mode = 'view';
-    },
-
     onModeChange(newMode) {
       this.mode = newMode;
     },
@@ -332,54 +374,61 @@ const app = Vue.createApp({
     },
 
     showNewPageDialog() {
-      this.newPagePath = this.currentPath ? this.currentPath + '/' : '';
+      const isSpecial = DocumentService.getSpecialFolder(this.currentPath);
+      this.newPagePath = (!isSpecial && this.currentPath) ? this.currentPath + '/' : '';
       this.showNewPage = true;
       this.$nextTick(() => { this.$refs.newPageInput?.focus(); });
     },
 
-    async createNewSnippet() {
-      window.location.hash = '#/_snippets';
-      // After route resolves, switch to edit mode for a new snippet
-      this.$nextTick(() => {
-        this.document = DocumentService.toDocument(
-          { id: null, name: '', isFolder: false },
-          null,
-          '_snippets'
-        );
-        this.document.docType = 'snippet';
-        this.document.type = 'file';
-        this.fileContent = '';
-        this.mode = 'edit';
-      });
+    createNewSnippet() {
+      // Navigate to the snippets folder; route resolution will land on the folder view
+      // where the user can create a new snippet from there
+      if (this.currentPath.startsWith('_snippets') && !this.currentPath.includes('/')) {
+        // Already on the snippets folder — open a blank snippet in edit mode directly
+        this.pendingNewSnippet = true;
+        this.onRouteChange();
+      } else {
+        this.pendingNewSnippet = true;
+        window.location.hash = '#/_snippets';
+      }
     },
 
-    async createNewDrawing() {
-      const folderId = await DriveService.getDrawingsFolderId();
-      const emptyDrawing = JSON.stringify({
-        type: 'excalidraw', version: 2, source: 'google-wiki',
-        elements: [], appState: { theme: this.darkMode ? 'dark' : 'light' }, files: {},
+    createNewDrawing() {
+      if (this.currentPath === '_drawings') {
+        this.pendingNewDrawing = true;
+        this.onRouteChange();
+      } else {
+        this.pendingNewDrawing = true;
+        window.location.hash = '#/_drawings';
+      }
+    },
+
+    showConfirm(title, message, confirmLabel) {
+      return new Promise((resolve, reject) => {
+        this.confirmDialog = {
+          title,
+          message,
+          confirmLabel,
+          resolve: () => { this.confirmDialog = null; resolve(); },
+          reject:  () => { this.confirmDialog = null; reject(); },
+        };
       });
-      this.document = DocumentService.toDocument(
-        { id: null, name: '', isFolder: false },
-        folderId,
-        '_drawings'
-      );
-      this.document.docType = 'drawing';
-      this.document.type = 'file';
-      this.fileContent = emptyDrawing;
-      this.mode = 'edit';
-      window.location.hash = '#/_drawings';
     },
 
     async deleteDocument() {
       if (!this.document || !this.document.id) return;
-      if (!confirm('Delete this document?')) return;
+      try {
+        await this.showConfirm(
+          'Delete "' + (this.document.name || 'this document') + '"?',
+          'This will move the file to trash in Google Drive.',
+          'Delete'
+        );
+      } catch { return; } // user cancelled
       try {
         await DriveService.deleteFile(this.document.id, this.document.parentId);
         CacheService.remove('content:' + this.document.id);
         CacheService.remove('path:' + this.currentPath);
         this.showToast('Deleted', 'success');
-        // Navigate to parent or home
         const parentPath = this.currentPath.split('/').slice(0, -1).join('/');
         window.location.hash = '#/' + (parentPath || '');
         this.refreshSidebar();
@@ -428,6 +477,39 @@ const app = Vue.createApp({
         if (hljsTheme) hljsTheme.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css';
         if (typeof mermaid !== 'undefined') mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
       }
+    },
+
+    isDirty() {
+      const renderer = this.$refs.renderer;
+      if (!renderer) return false;
+      const current = renderer.getContent?.();
+      return current !== undefined && current !== this.fileContent;
+    },
+
+    handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        if (this.confirmDialog) { this.confirmDialog.reject(); return; }
+        if (this.showNewPage) { if (!this.creatingPage) this.showNewPage = false; return; }
+        if (this.mode === 'edit') { this.cancelEdit(); return; }
+      }
+      const meta = e.metaKey || e.ctrlKey;
+      if (!meta) return;
+      if (e.key === 'e' && this.mode === 'view' && this.document?.type === 'file' && RendererService.canEdit(this.document.docType)) {
+        e.preventDefault(); this.startEdit();
+      } else if (e.key === 's' && this.mode === 'edit') {
+        e.preventDefault(); this.save();
+      } else if (e.key === 'n' && this.mode !== 'edit') {
+        e.preventDefault(); this.showNewPageDialog();
+      }
+    },
+
+    async cancelEdit() {
+      if (this.isDirty()) {
+        try {
+          await this.showConfirm('Discard unsaved changes?', '', 'Discard');
+        } catch { return; }
+      }
+      this.mode = 'view';
     },
 
     showToast(message, type = 'info') {

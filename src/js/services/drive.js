@@ -217,35 +217,39 @@ const DriveService = {
     }
   },
 
-  async createFile(name, parentId, content) {
-    const metadata = {
-      name,
-      parents: [parentId],
-    };
-
+  _buildMultipart(metadata, contentType, content) {
     const boundary = 'wiki_boundary_' + Date.now();
     const body = [
-      `--${boundary}`,
+      '--' + boundary,
       'Content-Type: application/json; charset=UTF-8',
       '',
       JSON.stringify(metadata),
-      `--${boundary}`,
-      'Content-Type: text/markdown',
+      '--' + boundary,
+      'Content-Type: ' + contentType,
       '',
       content,
-      `--${boundary}--`,
+      '--' + boundary + '--',
     ].join('\r\n');
+    return { boundary, body };
+  },
 
+  async _multipartPost(metadata, contentType, content) {
+    const { boundary, body } = this._buildMultipart(metadata, contentType, content);
     const res = await this._fetch(`${CONFIG.DRIVE_UPLOAD_API}/files?uploadType=multipart`, {
       method: 'POST',
       headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
       body,
     });
-    const data = await res.json();
+    return await res.json();
+  },
 
-    // Invalidate parent listing cache
+  async createFile(name, parentId, content) {
+    const data = await this._multipartPost(
+      { name, parents: [parentId] },
+      'text/markdown',
+      content
+    );
     CacheService.remove('listing:' + parentId);
-
     return data;
   },
 
@@ -305,15 +309,8 @@ const DriveService = {
   },
 
   async uploadBinary(name, parentId, blob, mimeType) {
-    const metadata = {
-      name,
-      parents: [parentId],
-    };
-
     const boundary = 'wiki_boundary_' + Date.now();
-    const metaJson = JSON.stringify(metadata);
-
-    // Build multipart body with binary
+    const metaJson = JSON.stringify({ name, parents: [parentId] });
     const metaPart = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metaJson}\r\n`;
     const filePart = `--${boundary}\r\nContent-Type: ${mimeType}\r\nContent-Transfer-Encoding: binary\r\n\r\n`;
     const closing = `\r\n--${boundary}--`;
@@ -363,38 +360,19 @@ const DriveService = {
     return token ? { Authorization: `Bearer ${token}` } : {};
   },
 
-  async getAssetsFolderId() {
+  async getSpecialFolderId(folderName) {
     const rootId = await this.getRootFolderId();
     const children = await this.listFolder(rootId);
-    const existing = children.find(f => f.isFolder && f.name === '_assets');
+    const existing = children.find(f => f.isFolder && f.name === folderName);
     if (existing) return existing.id;
-
-    const id = await this._createFolder('_assets', rootId);
+    const id = await this._createFolder(folderName, rootId);
     CacheService.remove('listing:' + rootId);
     return id;
   },
 
-  async getDrawingsFolderId() {
-    const rootId = await this.getRootFolderId();
-    const children = await this.listFolder(rootId);
-    const existing = children.find(f => f.isFolder && f.name === '_drawings');
-    if (existing) return existing.id;
-
-    const id = await this._createFolder('_drawings', rootId);
-    CacheService.remove('listing:' + rootId);
-    return id;
-  },
-
-  async getSnippetsFolderId() {
-    const rootId = await this.getRootFolderId();
-    const children = await this.listFolder(rootId);
-    const existing = children.find(f => f.isFolder && f.name === '_snippets');
-    if (existing) return existing.id;
-
-    const id = await this._createFolder('_snippets', rootId);
-    CacheService.remove('listing:' + rootId);
-    return id;
-  },
+  getAssetsFolderId()   { return this.getSpecialFolderId('_assets'); },
+  getDrawingsFolderId() { return this.getSpecialFolderId('_drawings'); },
+  getSnippetsFolderId() { return this.getSpecialFolderId('_snippets'); },
 
   async listSnippets(folderId) {
     const q = `'${folderId}' in parents and trashed=false`;
@@ -416,35 +394,29 @@ const DriveService = {
 
   async createSnippet(name, content, type, expiryTs, duration) {
     const folderId = await this.getSnippetsFolderId();
-    const metadata = {
-      name: name || 'Untitled Snippet',
-      parents: [folderId],
-      appProperties: {
-        type: type || 'markdown',
-        expiryTs: expiryTs ? expiryTs.toString() : '0',
-        duration: duration ? duration.toString() : '0',
-      }
-    };
+    return await this._multipartPost(
+      {
+        name: name || 'Untitled Snippet',
+        parents: [folderId],
+        appProperties: {
+          type: type || 'markdown',
+          expiryTs: expiryTs ? expiryTs.toString() : '0',
+          duration: duration ? duration.toString() : '0',
+        },
+      },
+      'text/plain',
+      content
+    );
+  },
 
-    const boundary = 'wiki_boundary_' + Date.now();
-    const body = [
-      `--${boundary}`,
-      'Content-Type: application/json; charset=UTF-8',
-      '',
-      JSON.stringify(metadata),
-      `--${boundary}`,
-      'Content-Type: text/plain',
-      '',
-      content,
-      `--${boundary}--`,
-    ].join('\r\n');
-
-    const res = await this._fetch(`${CONFIG.DRIVE_UPLOAD_API}/files?uploadType=multipart`, {
-      method: 'POST',
-      headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
-      body,
-    });
-    return await res.json();
+  async createDrawing(name, content, folderId) {
+    const data = await this._multipartPost(
+      { name: (name || 'Untitled') + '.excalidraw', parents: [folderId], mimeType: 'application/json' },
+      'application/json',
+      content
+    );
+    CacheService.remove('listing:' + folderId);
+    return data;
   },
 
   async updateSnippet(fileId, name, content, type, expiryTs, duration) {
@@ -487,16 +459,6 @@ const DriveService = {
     if (!homeFile) {
       await this.createFile('home.md', folderId, this._welcomeContent());
     }
-  },
-
-  async getSpecialFolderId(folderName) {
-    const rootId = await this.getRootFolderId();
-    const children = await this.listFolder(rootId);
-    const existing = children.find(f => f.isFolder && f.name === folderName);
-    if (existing) return existing.id;
-    const id = await this._createFolder(folderName, rootId);
-    CacheService.remove('listing:' + rootId);
-    return id;
   },
 
   _welcomeContent() {

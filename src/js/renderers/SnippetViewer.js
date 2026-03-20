@@ -12,10 +12,6 @@ const SnippetViewer = {
             <button @click="copyToClipboard" class="p-1.5 rounded-md hover:bg-muted" title="Copy">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
             </button>
-            <button @click="$emit('delete')" class="p-1.5 rounded-md hover:bg-red-50 text-red-500" title="Delete">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-            </button>
-            <button @click="$emit('mode-change', 'edit')" class="ml-2 px-3 py-1.5 text-xs font-medium rounded-md border hover:bg-muted">Edit</button>
           </div>
         </div>
         <div ref="aceEditor" class="ace_editor"></div>
@@ -26,22 +22,9 @@ const SnippetViewer = {
       </div>
     </div>
   `,
+  mixins: [AceMixin],
   props: ['document', 'content', 'mode', 'darkMode'],
-  emits: ['delete', 'mode-change', 'toast'],
-  data() {
-    return { editor: null, _loadedModes: new Set(['markdown']) };
-  },
-  watch: {
-    content: { handler() { this.loadContent(); }, immediate: true },
-  },
-  mounted() {
-    this.darkModeObserver = new MutationObserver(() => this.updateEditorTheme());
-    this.darkModeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-  },
-  beforeUnmount() {
-    if (this.editor) { this.editor.destroy(); this.editor.container.remove(); }
-    if (this.darkModeObserver) this.darkModeObserver.disconnect();
-  },
+  emits: ['toast'],
   computed: {
     timeLeftLabel() {
       const ts = this.document?.meta?.expiryTs;
@@ -59,46 +42,22 @@ const SnippetViewer = {
       return ts && (ts - Date.now() < 3600000);
     },
   },
+  watch: {
+    content: { handler() { this.loadContent(); }, immediate: true },
+  },
   methods: {
     async loadContent() {
       if (!this.document || this.content == null) return;
       this.$nextTick(async () => {
-        this.ensureEditor();
-        this.editor.setValue(this.content || '', -1);
-        await this.setEditorMode(this.document.meta.syntaxType || 'markdown');
-        this.editor.setReadOnly(true);
+        this._aceEnsure(this.$refs.aceEditor);
+        this._aceEditor.setValue(this.content || '', -1);
+        await this._aceSetMode(this.document.meta.syntaxType || 'markdown');
+        this._aceEditor.setReadOnly(true);
       });
-    },
-    ensureEditor() {
-      if (!this.$refs.aceEditor) return;
-      if (!this.editor) {
-        this.editor = ace.edit(this.$refs.aceEditor);
-        this.updateEditorTheme();
-        this.editor.setOptions({ enableBasicAutocompletion: true, enableLiveAutocompletion: true });
-      }
-    },
-    async setEditorMode(mode) {
-      if (!this.editor) return;
-      const aceMode = mode === 'text' ? 'text' : mode;
-      if (aceMode !== 'text' && !this._loadedModes.has(aceMode)) {
-        try {
-          await new Promise((resolve, reject) => {
-            const s = document.createElement('script');
-            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/mode-' + aceMode + '.min.js';
-            s.onload = resolve; s.onerror = reject; document.head.appendChild(s);
-          });
-          this._loadedModes.add(aceMode);
-        } catch { this.editor.session.setMode('ace/mode/text'); return; }
-      }
-      this.editor.session.setMode('ace/mode/' + aceMode);
-    },
-    updateEditorTheme() {
-      if (!this.editor) return;
-      this.editor.setTheme(document.documentElement.classList.contains('dark') ? 'ace/theme/monokai' : 'ace/theme/github');
     },
     async copyToClipboard() {
       try {
-        await navigator.clipboard.writeText(this.editor?.getValue() || this.content);
+        await navigator.clipboard.writeText(this._aceGetValue() || this.content);
         this.$emit('toast', 'Copied', 'success');
       } catch {}
     },

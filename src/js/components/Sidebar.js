@@ -247,17 +247,6 @@ const Sidebar = {
       assetUploadCount: 0,
     };
   },
-  watch: {
-    currentPath: {
-      handler(path) {
-        // Auto-switch perspective based on route
-        if (path && path.startsWith('_snippets')) this.perspective = 'snippets';
-        else if (path && path.startsWith('_drawings')) this.perspective = 'drawings';
-        else if (path && path.startsWith('_assets')) this.perspective = 'assets';
-      },
-      immediate: true,
-    },
-  },
   methods: {
     setPerspective(p) {
       this.perspective = p;
