@@ -12,26 +12,19 @@ const SidebarTree = {
             <svg
               class="icon chevron-icon"
               :class="{ 'transform rotate-90': expanded[item.id] }"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
               style="width: 1rem; height: 1rem; transition: transform 0.2s; flex-shrink: 0; cursor: pointer"
               @click.stop="toggleExpand(item)"
-            >
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-            </svg>
+            ><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
           </template>
-          <svg
-            v-else
-            class="icon"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            style="width: 1rem; height: 1rem; flex-shrink: 0"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-          </svg>
+          <!-- docType icon -->
+          <svg v-if="itemDocType(item) === 'snippet'" class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 1rem; height: 1rem; flex-shrink: 0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+          <svg v-else-if="itemDocType(item) === 'drawing'" class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 1rem; height: 1rem; flex-shrink: 0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h16v12H4zM8 20h8"/></svg>
+          <svg v-else-if="itemDocType(item) === 'asset' && !item.isFolder" class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 1rem; height: 1rem; flex-shrink: 0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+          <svg v-else-if="!item.isFolder" class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 1rem; height: 1rem; flex-shrink: 0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
           <span class="truncate">{{ displayName(item) }}</span>
+          <!-- expiry badge for snippets -->
+          <span v-if="itemDocType(item) === 'snippet' && item.appProperties?.expiryTs" class="ml-auto text-[9px] uppercase tracking-wider font-semibold" :class="isExpiringSoon(item.appProperties.expiryTs) ? 'text-orange-500' : 'opacity-50'">{{ formatTimeLeft(item.appProperties?.expiryTs) }}</span>
         </div>
         <sidebar-tree
           v-if="item.isFolder && expanded[item.id]"
@@ -40,30 +33,45 @@ const SidebarTree = {
           :current-path="currentPath"
           :expand-path="expandPath"
           :search-query="searchQuery"
+          :perspective="perspective"
         ></sidebar-tree>
       </div>
     </div>
   `,
-  props: ['folderId', 'basePath', 'currentPath', 'expandPath', 'searchQuery'],
+  props: ['folderId', 'basePath', 'currentPath', 'expandPath', 'searchQuery', 'perspective'],
   data() {
-    return {
-      items: [],
-      loading: false,
-      expanded: {},
-    };
+    return { items: [], loading: false, expanded: {} };
   },
   computed: {
     filteredItems() {
-      if (!this.searchQuery || !this.searchQuery.trim()) return this.items;
-      const query = this.searchQuery.toLowerCase();
-      return this.items.filter(item => item.name.toLowerCase().includes(query));
+      let result = this.items;
+
+      // Perspective filter
+      if (this.perspective && this.perspective !== 'all') {
+        result = result.filter(item => {
+          const dt = this.itemDocType(item);
+          const isSpecialFolder = item.isFolder && (item.name === '_snippets' || item.name === '_drawings' || item.name === '_assets');
+          if (this.perspective === 'pages') return (dt === 'markdown' || (dt === 'folder' && !isSpecialFolder));
+          if (this.perspective === 'snippets') return dt === 'snippet' || (item.isFolder && item.name === '_snippets');
+          if (this.perspective === 'drawings') return dt === 'drawing' || (item.isFolder && item.name === '_drawings');
+          if (this.perspective === 'assets') return dt === 'asset' || (item.isFolder && item.name === '_assets');
+          return true;
+        });
+      }
+
+      // Search filter
+      if (this.searchQuery && this.searchQuery.trim()) {
+        const query = this.searchQuery.toLowerCase();
+        result = result.filter(item => item.name.toLowerCase().includes(query));
+      }
+
+      return result;
     },
   },
-  async mounted() {
-    await this.loadItems();
-  },
+  async mounted() { await this.loadItems(); },
   watch: {
     folderId() { this.loadItems(); },
+    perspective() { this.loadItems(); },
   },
   methods: {
     async loadItems() {
@@ -71,20 +79,27 @@ const SidebarTree = {
       this.loading = true;
       try {
         const all = await DriveService.listFolder(this.folderId);
-        let items = this.basePath === '' ? all.filter(f => f.name !== '_assets' && f.name !== '_snippets') : all;
+        // At root level, show special folders; deduplicate folder+file with same base name
         const deduped = {};
-        for (const item of items) {
+        for (const item of all) {
           const baseName = item.isFolder ? item.name : item.name.replace(/\.md$/, '');
           if (!deduped[baseName] || (item.isFolder && !deduped[baseName].isFolder)) {
             deduped[baseName] = item;
           }
         }
         this.items = Object.values(deduped);
-        if (this.expandPath) {
-          for (const item of this.items) {
-            if (item.isFolder) {
-              const itemPath = this.itemPath(item);
-              if (this.expandPath.startsWith(itemPath + '/') || this.expandPath === itemPath) {
+        for (const item of this.items) {
+          if (item.isFolder) {
+            const ip = this.itemPath(item);
+            // Auto-expand for expandPath
+            if (this.expandPath && (this.expandPath.startsWith(ip + '/') || this.expandPath === ip)) {
+              this.expanded[item.id] = true;
+            }
+            // Auto-expand special folders when matching perspective is active
+            if (this.perspective && this.basePath === '') {
+              if ((this.perspective === 'snippets' && item.name === '_snippets') ||
+                  (this.perspective === 'drawings' && item.name === '_drawings') ||
+                  (this.perspective === 'assets' && item.name === '_assets')) {
                 this.expanded[item.id] = true;
               }
             }
@@ -93,163 +108,50 @@ const SidebarTree = {
       } catch (e) { console.error(e); }
       this.loading = false;
     },
-    displayName(item) { return item.name.replace(/\.md$/, ''); },
+    displayName(item) {
+      return item.name.replace(/\.md$/, '').replace(/\.excalidraw$/, '');
+    },
     itemPath(item) {
       const base = this.basePath ? this.basePath + '/' : '';
       return base + (item.isFolder ? item.name : item.name.replace(/\.md$/, ''));
     },
-    navigateDocument(item) { window.location.hash = '#/' + this.itemPath(item); },
+    itemDocType(item) {
+      const path = this.itemPath(item);
+      return DocumentService.resolveDocumentType(item, path);
+    },
+    navigateDocument(item) {
+      // For items inside _snippets or _drawings, use file ID in URL
+      const dt = this.itemDocType(item);
+      if (!item.isFolder && (dt === 'snippet' || dt === 'drawing')) {
+        const specialFolder = dt === 'snippet' ? '_snippets' : '_drawings';
+        window.location.hash = '#/' + specialFolder + '/' + item.id;
+      } else {
+        window.location.hash = '#/' + this.itemPath(item);
+      }
+    },
     toggleExpand(item) { this.expanded[item.id] = !this.expanded[item.id]; },
-    isActive(item) { return this.currentPath === this.itemPath(item); },
-  },
-};
-
-const SnippetList = {
-  template: `
-    <div class="flex-1 overflow-y-auto">
-      <div v-if="loading" class="flex justify-center py-8"><div class="spinner"></div></div>
-      <div v-else-if="filteredSnippets.length === 0" class="text-center py-8 text-xs opacity-50">No snippets</div>
-      <div
-        v-for="s in filteredSnippets"
-        :key="s.id"
-        class="snippet-item"
-        :class="{ 'active': isSnippetActive(s) }"
-        @click="selectSnippet(s)"
-      >
-        <div class="font-medium text-xs truncate" :title="s.name">{{ s.name }}</div>
-        <div class="flex items-center justify-between gap-2 mt-1">
-          <div class="text-[9px] uppercase tracking-wider opacity-60">{{ formatRelativeDate(s.modifiedTime) }}</div>
-          <div class="text-[9px] uppercase tracking-wider font-semibold" :class="isExpiringSoon(s.expiryTs) ? 'text-orange-500' : 'text-primary'">{{ formatTimeLeft(s.expiryTs) }}</div>
-        </div>
-      </div>
-    </div>
-  `,
-  props: ['currentPath', 'searchQuery', 'snippetsVersion'],
-  data() {
-    return {
-      snippets: [],
-      loading: false,
-    };
-  },
-  computed: {
-    filteredSnippets() {
-      const query = this.searchQuery.toLowerCase().trim();
-      if (!query) return this.snippets;
-      return this.snippets.filter(s => s.name.toLowerCase().includes(query));
-    },
-  },
-  async mounted() {
-    this.loadSnippets();
-  },
-  watch: {
-    snippetsVersion() {
-      this.loadSnippets();
-    },
-  },
-  methods: {
-    async loadSnippets() {
-      this.loading = true;
-      try {
-        const folderId = await DriveService.getSnippetsFolderId();
-        this.snippets = await DriveService.listSnippets(folderId);
-      } catch (e) { console.error(e); }
-      this.loading = false;
-    },
-    selectSnippet(s) { window.location.hash = '#/_snippets/' + s.id; },
-    isSnippetActive(s) { return this.currentPath === '_snippets/' + s.id; },
-    formatRelativeDate(dateStr) {
-      if (!dateStr) return '';
-      const date = new Date(dateStr);
-      const diff = new Date() - date;
-      if (diff < 60000) return 'Just now';
-      if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
-      if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
-      return date.toLocaleDateString();
+    isActive(item) {
+      const dt = this.itemDocType(item);
+      if (!item.isFolder && (dt === 'snippet' || dt === 'drawing')) {
+        const specialFolder = dt === 'snippet' ? '_snippets' : '_drawings';
+        return this.currentPath === specialFolder + '/' + item.id;
+      }
+      return this.currentPath === this.itemPath(item);
     },
     formatTimeLeft(expiryTs) {
-      if (!expiryTs || expiryTs === 0) return '∞';
-      const diff = expiryTs - Date.now();
-      if (diff <= 0) return 'Expired';
-      const minutes = Math.floor(diff / 60000);
-      if (minutes < 60) return minutes + 'm';
-      const hours = Math.floor(minutes / 60);
-      if (hours < 24) return hours + 'h';
-      return Math.floor(hours / 24) + 'd';
+      if (!expiryTs || expiryTs === '0' || expiryTs === 0) return '';
+      const ts = typeof expiryTs === 'string' ? parseInt(expiryTs) : expiryTs;
+      const diff = ts - Date.now();
+      if (diff <= 0) return 'Exp';
+      const m = Math.floor(diff / 60000);
+      if (m < 60) return m + 'm';
+      const h = Math.floor(m / 60);
+      if (h < 24) return h + 'h';
+      return Math.floor(h / 24) + 'd';
     },
     isExpiringSoon(expiryTs) {
-      return expiryTs && (expiryTs - Date.now() < 3600000);
-    },
-  }
-};
-
-const DrawingList = {
-  template: `
-    <div class="flex-1 overflow-y-auto">
-      <div v-if="loading" class="flex justify-center py-8"><div class="spinner"></div></div>
-      <div v-else-if="filteredDrawings.length === 0" class="text-center py-8 text-xs opacity-50">No drawings</div>
-      <div
-        v-else
-        v-for="d in filteredDrawings"
-        :key="d.id"
-        class="snippet-item"
-        :class="{ 'active': isActive(d) }"
-        @click="selectDrawing(d)"
-      >
-        <div class="font-medium text-xs truncate" :title="d.name">{{ d.name }}</div>
-        <div class="flex items-center justify-between gap-2 mt-1">
-          <div class="text-[9px] uppercase tracking-wider opacity-60">{{ formatRelativeDate(d.modifiedTime) }}</div>
-        </div>
-      </div>
-    </div>
-  `,
-  props: ['drawingsFolderId', 'selectedDrawingId', 'searchQuery'],
-  data() {
-    return {
-      drawings: [],
-      loading: false,
-    };
-  },
-  computed: {
-    filteredDrawings() {
-      const q = this.searchQuery.toLowerCase().trim();
-      if (!q) return this.drawings;
-      return this.drawings.filter(d => d.name.toLowerCase().includes(q));
-    },
-  },
-  watch: {
-    drawingsFolderId: {
-      handler(id) {
-        if (id) this.loadDrawings();
-      },
-      immediate: true,
-    },
-  },
-  methods: {
-    async loadDrawings() {
-      if (!this.drawingsFolderId) return;
-      this.loading = true;
-      try {
-        const all = await DriveService.listFolder(this.drawingsFolderId);
-        this.drawings = all.filter(f => !f.isFolder);
-      } catch (e) {
-        console.error(e);
-      }
-      this.loading = false;
-    },
-    selectDrawing(d) {
-      window.location.hash = '#/_drawings/' + d.id;
-    },
-    isActive(d) {
-      return this.selectedDrawingId && this.selectedDrawingId === d.id;
-    },
-    formatRelativeDate(dateStr) {
-      if (!dateStr) return '';
-      const date = new Date(dateStr);
-      const diff = Date.now() - date.getTime();
-      if (diff < 60000) return 'Just now';
-      if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
-      if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
-      return date.toLocaleDateString();
+      const ts = typeof expiryTs === 'string' ? parseInt(expiryTs) : expiryTs;
+      return ts && (ts - Date.now() < 3600000);
     },
   },
 };
@@ -257,40 +159,21 @@ const DrawingList = {
 const Sidebar = {
   template: `
     <aside class="sidebar" :class="{ 'collapsed': isCollapsed }">
-      <!-- Section Switcher (Top) -->
+      <!-- Perspective Filters -->
       <div class="p-2 flex items-center justify-around border-b" style="border-color: hsl(var(--border))">
-        <button
-          @click="setTab('wiki')"
-          class="nav-btn"
-          :class="{ active: activeTab === 'wiki' }"
-          title="Wiki"
-        >
+        <button @click="setPerspective('all')" class="nav-btn" :class="{ active: perspective === 'all' }" title="All">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+        </button>
+        <button @click="setPerspective('pages')" class="nav-btn" :class="{ active: perspective === 'pages' }" title="Pages">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5S19.832 5.477 21 6.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
         </button>
-        <button
-          @click="setTab('snippets')"
-          class="nav-btn"
-          :class="{ active: activeTab === 'snippets' }"
-          title="Snippets"
-        >
+        <button @click="setPerspective('snippets')" class="nav-btn" :class="{ active: perspective === 'snippets' }" title="Snippets">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
         </button>
-        <button
-          @click="setTab('drawings')"
-          class="nav-btn"
-          :class="{ active: activeTab === 'drawings' }"
-          title="Drawings"
-        >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h16v12H4zM8 20h8"/>
-          </svg>
+        <button @click="setPerspective('drawings')" class="nav-btn" :class="{ active: perspective === 'drawings' }" title="Drawings">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h16v12H4zM8 20h8"/></svg>
         </button>
-        <button
-          @click="setTab('assets')"
-          class="nav-btn"
-          :class="{ active: activeTab === 'assets' }"
-          title="Assets"
-        >
+        <button @click="setPerspective('assets')" class="nav-btn" :class="{ active: perspective === 'assets' }" title="Assets">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
         </button>
       </div>
@@ -301,7 +184,7 @@ const Sidebar = {
           <input
             v-model="searchQuery"
             type="text"
-            :placeholder="'Search ' + activeTab + '...'"
+            :placeholder="'Search ' + perspective + '...'"
             class="flex-1 px-2 py-1 text-xs rounded border bg-background"
             style="border-color: hsl(var(--border))"
           />
@@ -309,51 +192,42 @@ const Sidebar = {
         </div>
       </div>
 
-      <!-- Items List (Lower) -->
-      <div v-if="!isCollapsed" class="flex-1 flex flex-col overflow-hidden">
+      <!-- Unified Tree -->
+      <div v-if="!isCollapsed" class="flex-1 flex flex-col overflow-y-auto">
         <sidebar-tree
-          v-if="activeTab === 'wiki' && rootId"
+          v-if="rootId"
           :folder-id="rootId"
           base-path=""
           :current-path="currentPath"
           :expand-path="expandPath"
           :search-query="searchQuery"
+          :perspective="perspective"
         ></sidebar-tree>
-        <snippet-list
-          v-else-if="activeTab === 'snippets'"
-          :current-path="currentPath"
-          :search-query="searchQuery"
-          :snippets-version="snippetsVersion"
-        ></snippet-list>
-        <drawing-list
-          v-else-if="activeTab === 'drawings' && isDrawingsRoute && selectedDrawingId"
-          :drawings-folder-id="drawingsFolderId"
-          :selected-drawing-id="selectedDrawingId"
-          :search-query="searchQuery"
-        ></drawing-list>
-        <div v-else-if="activeTab === 'assets'" class="p-3 flex flex-col gap-3">
-          <div
-            class="sidebar-asset-drop"
-            :class="{ 'sidebar-asset-drop-active': assetDragging }"
-            @dragover.prevent="assetDragging = true"
-            @dragleave.prevent="assetDragging = false"
-            @drop.prevent="onAssetDrop"
-          >
-            <div v-if="assetUploading" class="flex flex-col items-center gap-2 text-xs">
-              <div class="spinner"></div>
-              <span>Uploading {{ assetUploadCount }} file(s)...</span>
-            </div>
-            <div v-else class="flex flex-col items-center gap-2 text-xs opacity-70">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-              <span>Drop files here</span>
-            </div>
+      </div>
+
+      <!-- Upload drop zone for assets perspective -->
+      <div v-if="!isCollapsed && perspective === 'assets'" class="p-3 border-t" style="border-color: hsl(var(--border))">
+        <div
+          class="sidebar-asset-drop"
+          :class="{ 'sidebar-asset-drop-active': assetDragging }"
+          @dragover.prevent="assetDragging = true"
+          @dragleave.prevent="assetDragging = false"
+          @drop.prevent="onAssetDrop"
+        >
+          <div v-if="assetUploading" class="flex flex-col items-center gap-2 text-xs">
+            <div class="spinner"></div>
+            <span>Uploading {{ assetUploadCount }} file(s)...</span>
           </div>
-          <label class="sidebar-asset-upload-btn">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-            Upload
-            <input type="file" multiple class="hidden" @change="onAssetFileInput" />
-          </label>
+          <div v-else class="flex flex-col items-center gap-2 text-xs opacity-70">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+            <span>Drop files here</span>
+          </div>
         </div>
+        <label class="sidebar-asset-upload-btn mt-2 w-full justify-center">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+          Upload
+          <input type="file" multiple class="hidden" @change="onAssetFileInput" />
+        </label>
       </div>
 
       <!-- Collapse Toggle -->
@@ -362,12 +236,12 @@ const Sidebar = {
       </button>
     </aside>
   `,
-  props: ['rootId', 'currentPath', 'expandPath', 'snippetsVersion', 'assetsFolderId', 'isDrawingsRoute', 'drawingsFolderId', 'selectedDrawingId', 'isCollapsed'],
+  props: ['rootId', 'currentPath', 'expandPath', 'isCollapsed'],
   emits: ['refresh', 'toggle-collapse', 'toast', 'assets-uploaded'],
   data() {
     return {
       searchQuery: '',
-      activeTab: 'wiki',
+      perspective: 'all',
       assetDragging: false,
       assetUploading: false,
       assetUploadCount: 0,
@@ -376,21 +250,22 @@ const Sidebar = {
   watch: {
     currentPath: {
       handler(path) {
-        if (path.startsWith('_snippets')) this.activeTab = 'snippets';
-        else if (path.startsWith('_drawings')) this.activeTab = 'drawings';
-        else if (path.startsWith('_assets')) this.activeTab = 'assets';
-        else this.activeTab = 'wiki';
+        // Auto-switch perspective based on route
+        if (path && path.startsWith('_snippets')) this.perspective = 'snippets';
+        else if (path && path.startsWith('_drawings')) this.perspective = 'drawings';
+        else if (path && path.startsWith('_assets')) this.perspective = 'assets';
       },
-      immediate: true
-    }
+      immediate: true,
+    },
   },
   methods: {
-    setTab(tab) {
-      this.activeTab = tab;
-      if (tab === 'assets') window.location.hash = '#/_assets';
-      else if (tab === 'snippets' && !this.currentPath.startsWith('_snippets')) window.location.hash = '#/_snippets';
-       else if (tab === 'drawings' && !this.currentPath.startsWith('_drawings')) window.location.hash = '#/_drawings';
-      else if (tab === 'wiki' && (this.currentPath.startsWith('_snippets') || this.currentPath.startsWith('_assets') || this.currentPath.startsWith('_drawings'))) window.location.hash = '#/';
+    setPerspective(p) {
+      this.perspective = p;
+      // Navigate to the matching route
+      if (p === 'snippets' && !this.currentPath.startsWith('_snippets')) window.location.hash = '#/_snippets';
+      else if (p === 'drawings' && !this.currentPath.startsWith('_drawings')) window.location.hash = '#/_drawings';
+      else if (p === 'assets' && !this.currentPath.startsWith('_assets')) window.location.hash = '#/_assets';
+      else if ((p === 'all' || p === 'pages') && (this.currentPath.startsWith('_snippets') || this.currentPath.startsWith('_drawings') || this.currentPath.startsWith('_assets'))) window.location.hash = '#/';
     },
     onAssetFileInput(e) {
       const files = Array.from(e.target.files || []);
@@ -408,31 +283,24 @@ const Sidebar = {
       this.assetUploadCount = files.length;
       let success = 0;
       try {
-        const folderId = this.assetsFolderId || await DriveService.getAssetsFolderId();
+        const folderId = await DriveService.getAssetsFolderId();
         for (const file of files) {
           try {
             let name = file.name;
-            if (!name || name === 'image.png') {
-              const ext = file.type.split('/')[1] || 'bin';
-              name = 'pasted-' + Date.now() + '.' + ext;
-            }
+            if (!name || name === 'image.png') { const ext = file.type.split('/')[1] || 'bin'; name = 'pasted-' + Date.now() + '.' + ext; }
             await DriveService.uploadBinary(name, folderId, file, file.type || 'application/octet-stream');
             success++;
-          } catch (e) {
-            this.$emit('toast', 'Failed to upload ' + file.name + ': ' + e.message, 'error');
-          }
+          } catch (e) { this.$emit('toast', 'Failed to upload ' + file.name + ': ' + e.message, 'error'); }
         }
         if (success > 0) {
           CacheService.remove('listing:' + folderId);
           this.$emit('toast', success + ' file(s) uploaded', 'success');
           this.$emit('assets-uploaded');
         }
-      } catch (e) {
-        this.$emit('toast', 'Upload failed: ' + e.message, 'error');
-      }
+      } catch (e) { this.$emit('toast', 'Upload failed: ' + e.message, 'error'); }
       this.assetUploading = false;
       this.assetUploadCount = 0;
-    }
+    },
   },
-  components: { 'sidebar-tree': SidebarTree, 'snippet-list': SnippetList, 'drawing-list': DrawingList }
+  components: { 'sidebar-tree': SidebarTree },
 };

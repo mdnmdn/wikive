@@ -1,0 +1,168 @@
+const SnippetEditor = {
+  template: `
+    <div class="snippet-content-area h-full" @paste="onGlobalPaste">
+      <div class="flex items-center justify-between px-4 py-2 border-b" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted) / 0.2)">
+        <div class="flex items-center gap-3 flex-1 min-width-0">
+          <input v-model="editName" placeholder="Snippet name..." class="bg-transparent font-medium text-sm focus:outline-none focus:ring-1 focus:ring-primary px-2 py-1 rounded w-full max-w-xs" />
+          <select v-model="editType" class="text-xs bg-background border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary max-h-40" style="border-color: hsl(var(--border))">
+            <optgroup label="Common">
+              <option value="markdown">Markdown</option>
+              <option value="javascript">JavaScript</option>
+              <option value="python">Python</option>
+              <option value="html">HTML</option>
+              <option value="css">CSS</option>
+              <option value="json">JSON</option>
+              <option value="yaml">YAML</option>
+              <option value="sh">Bash/Shell</option>
+            </optgroup>
+            <optgroup label="Languages">
+              <option value="c_cpp">C / C++</option>
+              <option value="csharp">C#</option>
+              <option value="golang">Go</option>
+              <option value="java">Java</option>
+              <option value="php">PHP</option>
+              <option value="ruby">Ruby</option>
+              <option value="rust">Rust</option>
+              <option value="typescript">TypeScript</option>
+              <option value="dart">Dart</option>
+              <option value="kotlin">Kotlin</option>
+              <option value="swift">Swift</option>
+              <option value="clojure">Clojure</option>
+              <option value="elixir">Elixir</option>
+              <option value="haskell">Haskell</option>
+              <option value="lua">Lua</option>
+              <option value="perl">Perl</option>
+              <option value="r">R</option>
+              <option value="scala">Scala</option>
+            </optgroup>
+            <optgroup label="Markup & Config">
+              <option value="xml">XML</option>
+              <option value="powershell">PowerShell</option>
+              <option value="sql">SQL</option>
+              <option value="latex">LaTeX</option>
+              <option value="dockerfile">Dockerfile</option>
+              <option value="nginx">Nginx</option>
+              <option value="toml">TOML</option>
+              <option value="ini">INI</option>
+              <option value="text">Plain Text</option>
+            </optgroup>
+          </select>
+          <select v-model="editExpiry" class="text-xs bg-background border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary" style="border-color: hsl(var(--border))">
+            <option :value="5">5 minutes</option>
+            <option :value="20">20 minutes</option>
+            <option :value="60">1 hour</option>
+            <option :value="1440">1 day</option>
+            <option :value="10080">1 week</option>
+            <option :value="0">No expiration</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-2">
+          <button @click="saveSnippet" :disabled="saving" class="ml-2 px-4 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 flex items-center gap-2">
+            <div v-if="saving" class="spinner" style="width:0.75rem; height:0.75rem; border-width:1px; border-top-color:white"></div>
+            {{ document?.id ? 'Update' : 'Create' }}
+          </button>
+          <button @click="$emit('mode-change', 'view')" class="px-3 py-1.5 text-xs font-medium rounded-md border hover:bg-muted">Cancel</button>
+        </div>
+      </div>
+      <div ref="aceEditor" class="ace_editor"></div>
+    </div>
+  `,
+  props: ['document', 'content', 'mode', 'darkMode'],
+  emits: ['save', 'mode-change', 'toast'],
+  data() {
+    return {
+      editor: null,
+      editName: '',
+      editType: 'markdown',
+      editExpiry: 1440,
+      saving: false,
+      _loadedModes: new Set(['markdown']),
+    };
+  },
+  watch: {
+    document: {
+      handler(doc) {
+        if (doc) {
+          this.editName = doc.name || '';
+          this.editType = doc.meta?.syntaxType || 'markdown';
+          this.editExpiry = doc.meta?.duration || 1440;
+        }
+      },
+      immediate: true,
+    },
+    editType(t) { if (this.editor) this.setEditorMode(t); },
+  },
+  mounted() {
+    this.darkModeObserver = new MutationObserver(() => this.updateEditorTheme());
+    this.darkModeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    this.$nextTick(() => {
+      this.ensureEditor();
+      this.editor.setValue(this.content || '', -1);
+      this.setEditorMode(this.editType);
+      this.editor.setReadOnly(false);
+      this.editor.focus();
+    });
+  },
+  beforeUnmount() {
+    if (this.editor) { this.editor.destroy(); this.editor.container.remove(); }
+    if (this.darkModeObserver) this.darkModeObserver.disconnect();
+  },
+  methods: {
+    ensureEditor() {
+      if (!this.$refs.aceEditor || this.editor) return;
+      this.editor = ace.edit(this.$refs.aceEditor);
+      this.updateEditorTheme();
+      this.editor.setOptions({ enableBasicAutocompletion: true, enableLiveAutocompletion: true });
+    },
+    async setEditorMode(mode) {
+      if (!this.editor) return;
+      const aceMode = mode === 'text' ? 'text' : mode;
+      if (aceMode !== 'text' && !this._loadedModes.has(aceMode)) {
+        try {
+          await new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/mode-' + aceMode + '.min.js';
+            s.onload = resolve; s.onerror = reject; document.head.appendChild(s);
+          });
+          this._loadedModes.add(aceMode);
+        } catch { this.editor.session.setMode('ace/mode/text'); return; }
+      }
+      this.editor.session.setMode('ace/mode/' + aceMode);
+    },
+    updateEditorTheme() {
+      if (!this.editor) return;
+      this.editor.setTheme(document.documentElement.classList.contains('dark') ? 'ace/theme/monokai' : 'ace/theme/github');
+    },
+    getContent() {
+      return this.editor ? this.editor.getValue() : this.content;
+    },
+    async saveSnippet() {
+      const content = this.getContent();
+      this.saving = true;
+      try {
+        const duration = this.editExpiry;
+        const expiryTs = duration > 0 ? Date.now() + duration * 60000 : 0;
+        if (this.document?.id) {
+          await DriveService.updateSnippet(this.document.id, this.editName, content, this.editType, expiryTs, duration);
+          this.$emit('toast', 'Snippet updated', 'success');
+        } else {
+          const res = await DriveService.createSnippet(this.editName || 'Untitled', content, this.editType, expiryTs, duration);
+          this.$emit('toast', 'Snippet created', 'success');
+          window.location.hash = '#/_snippets/' + res.id;
+        }
+        this.$emit('save', { name: this.editName, type: this.editType, duration, expiryTs });
+      } catch (e) {
+        this.$emit('toast', 'Error: ' + e.message, 'error');
+      }
+      this.saving = false;
+    },
+    onGlobalPaste(e) {
+      if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.classList.contains('ace_text-input')) return;
+      const text = e.clipboardData?.getData('text');
+      if (text && !this.document?.id) {
+        this.editor?.setValue(text, -1);
+        this.editExpiry = 20;
+      }
+    },
+  },
+};

@@ -94,7 +94,7 @@ const DriveService = {
 
     const fetchFresh = async () => {
       const q = `'${folderId}' in parents and trashed=false`;
-      const fields = 'files(id,name,mimeType,modifiedTime)';
+      const fields = 'files(id,name,mimeType,modifiedTime,appProperties)';
       const res = await this._fetch(
         `${CONFIG.DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=${fields}&orderBy=name`
       );
@@ -103,7 +103,9 @@ const DriveService = {
         id: f.id,
         name: f.name,
         isFolder: f.mimeType === 'application/vnd.google-apps.folder',
+        mimeType: f.mimeType,
         modifiedTime: f.modifiedTime,
+        appProperties: f.appProperties || null,
       }));
       // Sort: folders first, then alphabetically
       files.sort((a, b) => {
@@ -193,7 +195,9 @@ const DriveService = {
         const exact = children.find(f => f.name === segment);
         if (exact) {
           if (exact.isFolder) {
-            return { type: 'not_found', parentId: currentId, name: segment, path };
+            const result = { id: exact.id, type: 'folder', name: segment, parentId: currentId, path };
+            CacheService.set(cacheKey, result);
+            return result;
           }
           const result = { id: exact.id, type: 'file', name: exact.name, parentId: currentId };
           CacheService.set(cacheKey, result);
@@ -475,6 +479,24 @@ const DriveService = {
       `${CONFIG.DRIVE_API}/files/${fileId}?fields=id,name,mimeType,size,modifiedTime,appProperties,createdTime`
     );
     return await res.json();
+  },
+
+  async ensureHomePage(folderId) {
+    const children = await this.listFolder(folderId);
+    const homeFile = children.find(f => !f.isFolder && f.name === 'home.md');
+    if (!homeFile) {
+      await this.createFile('home.md', folderId, this._welcomeContent());
+    }
+  },
+
+  async getSpecialFolderId(folderName) {
+    const rootId = await this.getRootFolderId();
+    const children = await this.listFolder(rootId);
+    const existing = children.find(f => f.isFolder && f.name === folderName);
+    if (existing) return existing.id;
+    const id = await this._createFolder(folderName, rootId);
+    CacheService.remove('listing:' + rootId);
+    return id;
   },
 
   _welcomeContent() {

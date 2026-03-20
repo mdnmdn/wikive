@@ -8,7 +8,7 @@ const Breadcrumb = {
       </template>
     </nav>
   `,
-  props: ['path', 'snippetName'],
+  props: ['path', 'document'],
   computed: {
     segments() {
       if (!this.path || this.path === '/') return [];
@@ -21,10 +21,16 @@ const Breadcrumb = {
   },
   methods: {
     formatSegment(seg, index) {
-      if (this.snippetName && seg.path.startsWith('_snippets/') && index === this.segments.length - 1) {
-        return this.snippetName;
+      // For snippet routes, show the document name for the last segment (which is an ID)
+      if (this.document && index === this.segments.length - 1) {
+        if (seg.path.startsWith('_snippets/') && this.document.name) {
+          return this.document.name;
+        }
+        if (seg.path.startsWith('_drawings/') && this.document.name) {
+          return this.document.name.replace(/\.excalidraw$/, '');
+        }
       }
       return seg.name;
-    }
-  }
+    },
+  },
 };
