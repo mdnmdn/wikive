@@ -1,5 +1,11 @@
 // Google Wiki Configuration
 const CONFIG = {
+  // Storage provider: 'google-drive' (default)
+  // Future options: 'onedrive', 's3', 'box'
+  PROVIDER: "google-drive",
+
+  // --- Google Drive provider config ---
+
   // Replace with your Google Cloud Console OAuth 2.0 Client ID
   GOOGLE_CLIENT_ID:
     "87745xxxxx4.apps.googleusercontent.com",
@@ -10,9 +16,6 @@ const CONFIG = {
   // - "test1/test2/_wiki" → creates full nested hierarchy automatically
   // The app will search for existing folders and create any missing levels.
   ROOT_FOLDER_NAME: "_wiki",
-
-  // Cache TTL in milliseconds (5 minutes)
-  CACHE_TTL: 5 * 60 * 1000,
 
   // Google Drive API base URL
   DRIVE_API: "https://www.googleapis.com/drive/v3",
@@ -25,4 +28,9 @@ const CONFIG = {
   // Deploy the worker from /worker and set the URL here.
   // Leave empty to disable real-time features.
   WORKER_URL: "",
+
+  // --- Shared config ---
+
+  // Cache TTL in milliseconds (5 minutes)
+  CACHE_TTL: 5 * 60 * 1000,
 };

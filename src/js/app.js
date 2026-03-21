@@ -177,9 +177,9 @@ const app = Vue.createApp({
     this.darkMode = savedDarkMode;
     this.applyDarkMode(savedDarkMode);
 
-    AuthService.init((loggedIn) => {
+    AuthManager.init((loggedIn) => {
       this.authenticated = loggedIn;
-      this.user = AuthService.user;
+      this.user = AuthManager.user;
       if (loggedIn) this.initApp();
     });
 
@@ -203,7 +203,7 @@ const app = Vue.createApp({
   methods: {
     async initApp() {
       try {
-        this.rootId = await DriveService.getRootFolderId();
+        this.rootId = await StorageService.getRootFolderId();
 
         // Load and connect real-time notifications only when WORKER_URL is configured
         if (CONFIG.WORKER_URL) {
@@ -293,7 +293,7 @@ const app = Vue.createApp({
         // Open blank new drawing in edit mode
         if (this.pendingNewDrawing && this.currentPath === '_drawings') {
           this.pendingNewDrawing = false;
-          const folderId = await DriveService.getDrawingsFolderId();
+          const folderId = await StorageService.getDrawingsFolderId();
           const doc = DocumentService.toDocument(
             { id: null, name: '', isFolder: false }, folderId, '_drawings'
           );
@@ -320,9 +320,9 @@ const app = Vue.createApp({
 
       // Get the special folder ID
       let folderId;
-      if (specialFolder === 'assets') folderId = await DriveService.getAssetsFolderId();
-      else if (specialFolder === 'snippets') folderId = await DriveService.getSnippetsFolderId();
-      else if (specialFolder === 'drawings') folderId = await DriveService.getDrawingsFolderId();
+      if (specialFolder === 'assets') folderId = await StorageService.getAssetsFolderId();
+      else if (specialFolder === 'snippets') folderId = await StorageService.getSnippetsFolderId();
+      else if (specialFolder === 'drawings') folderId = await StorageService.getDrawingsFolderId();
 
       if (!itemId) {
         // Root of special folder — show as folder
@@ -346,13 +346,13 @@ const app = Vue.createApp({
 
       // Specific item selected
       if (specialFolder === 'snippets') {
-        const meta = await DriveService.getFileMetadata(itemId);
+        const meta = await StorageService.getFileMetadata(itemId);
         this.document = DocumentService.toDocument(meta, folderId, this.currentPath);
-        this.fileContent = await DriveService.getFileContent(itemId);
+        this.fileContent = await StorageService.getFileContent(itemId);
       } else if (specialFolder === 'drawings') {
-        const meta = await DriveService.getFileMetadata(itemId);
+        const meta = await StorageService.getFileMetadata(itemId);
         this.document = DocumentService.toDocument(meta, folderId, this.currentPath);
-        this.fileContent = await DriveService.getFileContent(itemId);
+        this.fileContent = await StorageService.getFileContent(itemId);
       } else {
         // Asset subfolder navigation is handled by the AssetViewer
         this.document = DocumentService.toDocument(
@@ -365,7 +365,7 @@ const app = Vue.createApp({
     },
 
     async resolveWikiRoute() {
-      const resolved = await DriveService.resolvePath(this.currentPath);
+      const resolved = await StorageService.resolvePath(this.currentPath);
 
       if (!resolved || resolved.type === 'not_found') {
         if (resolved?.name === 'home') {
@@ -376,7 +376,7 @@ const app = Vue.createApp({
       }
 
       if (resolved.type === 'file') {
-        this.fileContent = await DriveService.getFileContent(resolved.id);
+        this.fileContent = await StorageService.getFileContent(resolved.id);
         this.document = DocumentService.toDocument(
           { id: resolved.id, name: resolved.name, isFolder: false },
           resolved.parentId,
@@ -401,7 +401,7 @@ const app = Vue.createApp({
       const content = renderer.getContent();
       try {
         if (this.document && this.document.type === 'file') {
-          await DriveService.updateFile(this.document.id, content);
+          await StorageService.updateFile(this.document.id, content);
           this.showToast('Saved', 'success');
           if (typeof RealtimeService !== 'undefined') RealtimeService.notifyUpdate('save', this.currentPath, this.document.docType);
         }
@@ -447,12 +447,12 @@ const app = Vue.createApp({
         const fileName = segments.pop() + '.md';
         let parentId;
         if (segments.length > 0) {
-          parentId = await DriveService.createFolderPath(segments.join('/'));
+          parentId = await StorageService.createFolderPath(segments.join('/'));
         } else {
-          parentId = await DriveService.getRootFolderId();
+          parentId = await StorageService.getRootFolderId();
         }
         const initialContent = '# ' + fileName.replace(/\.md$/, '') + '\n\nStart writing here...\n';
-        await DriveService.createFile(fileName, parentId, initialContent);
+        await StorageService.createFile(fileName, parentId, initialContent);
         if (typeof RealtimeService !== 'undefined') RealtimeService.notifyUpdate('create', path, 'markdown');
         this.showToast('Page created', 'success');
         this.showNewPage = false;
@@ -519,7 +519,7 @@ const app = Vue.createApp({
         );
       } catch { return; } // user cancelled
       try {
-        await DriveService.deleteFile(this.document.id, this.document.parentId);
+        await StorageService.deleteFile(this.document.id, this.document.parentId);
         if (typeof RealtimeService !== 'undefined') RealtimeService.notifyUpdate('delete', this.currentPath, this.document.docType);
         CacheService.remove('content:' + this.document.id);
         CacheService.remove('path:' + this.currentPath);
@@ -626,11 +626,11 @@ const app = Vue.createApp({
         const newFileName = segments.pop() + '.md';
         let newParentId;
         if (segments.length > 0) {
-          newParentId = await DriveService.createFolderPath(segments.join('/'));
+          newParentId = await StorageService.createFolderPath(segments.join('/'));
         } else {
-          newParentId = await DriveService.getRootFolderId();
+          newParentId = await StorageService.getRootFolderId();
         }
-        await DriveService.moveFile(this.document.id, newFileName, this.document.parentId, newParentId);
+        await StorageService.moveFile(this.document.id, newFileName, this.document.parentId, newParentId);
         CacheService.remove('path:' + this.currentPath);
         this.showToast('Page moved', 'success');
         this.showRenameMove = false;
@@ -648,7 +648,7 @@ const app = Vue.createApp({
       try {
         if (doc.docType === 'markdown') {
           const baseName = doc.name.replace(/\.md$/, '');
-          const data = await DriveService.copyFile(doc.id, baseName + '-copy.md', doc.parentId);
+          const data = await StorageService.copyFile(doc.id, baseName + '-copy.md', doc.parentId);
           const pathSegs = this.currentPath.split('/');
           pathSegs[pathSegs.length - 1] = baseName + '-copy';
           const newPath = pathSegs.join('/');
@@ -657,14 +657,14 @@ const app = Vue.createApp({
           this.refreshSidebar(newPath);
           window.location.hash = '#/' + newPath;
         } else if (doc.docType === 'snippet') {
-          const data = await DriveService.copyFile(doc.id, 'Copy of ' + doc.name, doc.parentId);
+          const data = await StorageService.copyFile(doc.id, 'Copy of ' + doc.name, doc.parentId);
           this.showToast('Snippet cloned', 'success');
           CacheService.remove('listing:' + doc.parentId);
           this.refreshSidebar();
           window.location.hash = '#/_snippets/' + data.id;
         } else if (doc.docType === 'drawing') {
           const baseName = doc.name.replace(/\.excalidraw$/, '');
-          const data = await DriveService.copyFile(doc.id, baseName + '-copy.excalidraw', doc.parentId);
+          const data = await StorageService.copyFile(doc.id, baseName + '-copy.excalidraw', doc.parentId);
           this.showToast('Drawing cloned', 'success');
           CacheService.remove('listing:' + doc.parentId);
           this.refreshSidebar();

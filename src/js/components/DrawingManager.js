@@ -150,13 +150,8 @@ const DrawingManager = {
       if (!this.drawingsFolderId) return;
       this.loading = true;
       try {
-        const q = `'${this.drawingsFolderId}' in parents and trashed=false`;
-        const fields = 'files(id,name,mimeType,modifiedTime)';
-        const res = await DriveService._fetch(
-          `${CONFIG.DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=${fields}&orderBy=modifiedTime desc`
-        );
-        const data = await res.json();
-        this.drawings = (data.files || []).map(f => ({
+        const files = await StorageService.listFolder(this.drawingsFolderId);
+        this.drawings = files.map(f => ({
           id: f.id,
           name: f.name,
           modifiedTime: f.modifiedTime,
@@ -169,7 +164,7 @@ const DrawingManager = {
 
     async loadAndSelectDrawing(id) {
       try {
-        const meta = await DriveService.getFileMetadata(id);
+        const meta = await StorageService.getFileMetadata(id);
         const entry = {
           id: meta.id,
           name: meta.name,
@@ -190,7 +185,7 @@ const DrawingManager = {
       this.excalidrawReady = true;
       this.$emit('drawing-selected', d);
       try {
-        this.jsonContent = await DriveService.getFileContent(d.id);
+        this.jsonContent = await StorageService.getFileContent(d.id);
         this.$nextTick(() => {
           if (this.$refs.excalidraw) {
             this.$refs.excalidraw.load(this.jsonContent);
@@ -238,7 +233,7 @@ const DrawingManager = {
       this.saving = true;
       try {
         if (this.selectedDrawing) {
-          await DriveService.updateFile(this.selectedDrawing.id, this.jsonContent, { name });
+          await StorageService.updateFile(this.selectedDrawing.id, this.jsonContent, { name });
           this.selectedDrawing.name = name;
           this.editName = name.replace(/\.excalidraw$/, '');
           this.$emit('drawing-selected', this.selectedDrawing);
@@ -246,29 +241,7 @@ const DrawingManager = {
           this.$emit('refresh-drawings');
           await this.loadDrawings();
         } else {
-          const metadata = {
-            name,
-            parents: [this.drawingsFolderId],
-            mimeType: 'application/json',
-          };
-          const boundary = 'wiki_boundary_' + Date.now();
-          const body = [
-            `--${boundary}`,
-            'Content-Type: application/json; charset=UTF-8',
-            '',
-            JSON.stringify(metadata),
-            `--${boundary}`,
-            'Content-Type: application/json',
-            '',
-            this.jsonContent,
-            `--${boundary}--`,
-          ].join('\r\n');
-          const res = await DriveService._fetch(`${CONFIG.DRIVE_UPLOAD_API}/files?uploadType=multipart`, {
-            method: 'POST',
-            headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
-            body,
-          });
-          const data = await res.json();
+          const data = await StorageService.createDrawing(name, this.jsonContent, this.drawingsFolderId);
           this.$emit('toast', 'Drawing created', 'success');
           this.$emit('refresh-drawings');
           await this.loadDrawings();
@@ -286,7 +259,7 @@ const DrawingManager = {
       if (!this.selectedDrawing) return;
       if (!confirm('Delete this drawing?')) return;
       try {
-        await DriveService.deleteFile(this.selectedDrawing.id, this.drawingsFolderId);
+        await StorageService.deleteFile(this.selectedDrawing.id, this.drawingsFolderId);
         this.$emit('toast', 'Drawing deleted', 'success');
         this.$emit('refresh-drawings');
         this.selectedDrawing = null;
@@ -303,8 +276,8 @@ const DrawingManager = {
     async downloadDrawing() {
       if (!this.selectedDrawing) return;
       try {
-        const url = DriveService.getDownloadUrl(this.selectedDrawing.id);
-        const headers = DriveService.getAuthHeaders();
+        const url = StorageService.getDownloadUrl(this.selectedDrawing.id);
+        const headers = StorageService.getAuthHeaders();
         const res = await fetch(url, { headers });
         const blob = await res.blob();
         const a = document.createElement('a');

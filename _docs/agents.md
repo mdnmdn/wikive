@@ -32,6 +32,7 @@ Build a zero-backend personal wiki that runs entirely in the browser, storing Ma
 - `config.js`: App configuration (OAuth client ID, Drive API endpoints, cache TTL, scope).
 - `js/app.js`: Vue app, router, and global state.
 - `js/components/`: UI components (header, sidebar, editor, asset manager, snippets, etc.).
-- `js/services/`: Drive, auth, and cache services.
+- `js/providers/`: Storage and auth provider contracts and implementations (see `_docs/persistence-providers.md`).
+- `js/services/`: StorageService/AuthManager facades, cache, document model, renderer registry.
 - `css/app.css`: Layout and component styling.
 - `assets/`: App branding assets.

@@ -250,7 +250,7 @@ const AssetManager = {
       if (!this.currentFolderId) return;
       this.loading = true;
       try {
-        const all = await DriveService.listFolder(this.currentFolderId);
+        const all = await StorageService.listFolder(this.currentFolderId);
         this.items = all;
       } catch (e) {
         this.$emit('toast', 'Failed to load assets: ' + e.message, 'error');
@@ -335,7 +335,7 @@ const AssetManager = {
             const ext = file.type.split('/')[1] || 'bin';
             name = 'pasted-' + Date.now() + '.' + ext;
           }
-          await DriveService.uploadBinary(name, this.currentFolderId, file, file.type || 'application/octet-stream');
+          await StorageService.uploadBinary(name, this.currentFolderId, file, file.type || 'application/octet-stream');
           success++;
         } catch (e) {
           this.$emit('toast', 'Failed to upload ' + file.name + ': ' + e.message, 'error');
@@ -373,7 +373,7 @@ const AssetManager = {
       const name = prompt('Folder name:');
       if (!name) return;
       try {
-        await DriveService._createFolder(name, this.currentFolderId);
+        await StorageService.createFolder(name, this.currentFolderId);
         CacheService.remove('listing:' + this.currentFolderId);
         await this.loadItems();
         this.$emit('toast', 'Folder created', 'success');
@@ -407,8 +407,8 @@ const AssetManager = {
     },
 
     thumbnailUrl(item) {
-      const url = DriveService.getDownloadUrl(item.id);
-      const headers = DriveService.getAuthHeaders();
+      const url = StorageService.getDownloadUrl(item.id);
+      const headers = StorageService.getAuthHeaders();
       // Use a proxy approach: create object URL via fetch
       // For thumbnails, we'll lazy-load
       if (!item._thumbUrl) {
@@ -432,7 +432,7 @@ const AssetManager = {
       if (this.isTextFile(item)) {
         this.previewLoading = true;
         try {
-          this.previewText = await DriveService.getFileContent(item.id);
+          this.previewText = await StorageService.getFileContent(item.id);
         } catch (e) {
           this.previewText = 'Error loading file: ' + e.message;
         }
@@ -442,8 +442,8 @@ const AssetManager = {
         // For media files, fetch blob and create object URL
         this.previewSrc = '';
         try {
-          const url = DriveService.getDownloadUrl(item.id);
-          const headers = DriveService.getAuthHeaders();
+          const url = StorageService.getDownloadUrl(item.id);
+          const headers = StorageService.getAuthHeaders();
           const res = await fetch(url, { headers });
           const blob = await res.blob();
           this.previewSrc = URL.createObjectURL(blob);
@@ -456,7 +456,7 @@ const AssetManager = {
     async savePreviewContent() {
       if (!this.previewing) return;
       try {
-        await DriveService.updateFile(this.previewing.id, this.previewText);
+        await StorageService.updateFile(this.previewing.id, this.previewText);
         this.previewEditing = false;
         this.$emit('toast', 'File saved', 'success');
       } catch (e) {
@@ -467,8 +467,8 @@ const AssetManager = {
     // Download
     async downloadItem(item) {
       try {
-        const url = DriveService.getDownloadUrl(item.id);
-        const headers = DriveService.getAuthHeaders();
+        const url = StorageService.getDownloadUrl(item.id);
+        const headers = StorageService.getAuthHeaders();
         const res = await fetch(url, { headers });
         const blob = await res.blob();
         const a = document.createElement('a');
@@ -504,7 +504,7 @@ const AssetManager = {
       if (newName === item.name) return;
 
       try {
-        await DriveService.renameFile(item.id, newName, this.currentFolderId);
+        await StorageService.renameFile(item.id, newName, this.currentFolderId);
         this.$emit('toast', 'Renamed to ' + newName, 'success');
         CacheService.remove('listing:' + this.currentFolderId);
         await this.loadItems();
@@ -524,7 +524,7 @@ const AssetManager = {
       this.deleting = null;
 
       try {
-        await DriveService.deleteFile(item.id, this.currentFolderId);
+        await StorageService.deleteFile(item.id, this.currentFolderId);
         this.$emit('toast', item.name + ' deleted', 'success');
         CacheService.remove('listing:' + this.currentFolderId);
         await this.loadItems();

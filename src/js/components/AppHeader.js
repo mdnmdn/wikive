@@ -157,7 +157,7 @@ const AppHeader = {
   methods: {
     logout() {
       if (typeof RealtimeService !== 'undefined') RealtimeService.disconnect();
-      AuthService.logout();
+      AuthManager.logout();
     },
     createAction(type) {
       this.showCreateMenu = false;
