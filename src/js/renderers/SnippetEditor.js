@@ -104,10 +104,10 @@ const SnippetEditor = {
         const duration = this.editExpiry;
         const expiryTs = duration > 0 ? Date.now() + duration * 60000 : 0;
         if (this.document?.id) {
-          await DriveService.updateSnippet(this.document.id, this.editName, content, this.editType, expiryTs, duration);
+          await StorageService.updateSnippet(this.document.id, this.editName, content, this.editType, expiryTs, duration);
           this.$emit('toast', 'Snippet updated', 'success');
         } else {
-          const res = await DriveService.createSnippet(this.editName || 'Untitled', content, this.editType, expiryTs, duration);
+          const res = await StorageService.createSnippet(this.editName || 'Untitled', content, this.editType, expiryTs, duration);
           this.$emit('toast', 'Snippet created', 'success');
           window.location.hash = '#/_snippets/' + res.id;
         }
