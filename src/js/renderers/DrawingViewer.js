@@ -44,8 +44,8 @@ const DrawingViewer = {
     async downloadDrawing() {
       if (!this.document) return;
       try {
-        const url = DriveService.getDownloadUrl(this.document.id);
-        const headers = DriveService.getAuthHeaders();
+        const url = StorageService.getDownloadUrl(this.document.id);
+        const headers = StorageService.getAuthHeaders();
         const res = await fetch(url, { headers });
         const blob = await res.blob();
         const a = document.createElement('a');

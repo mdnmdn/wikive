@@ -133,15 +133,15 @@ const FolderViewer = {
       this.defaultPageContent = null;
       this.defaultPageId = null;
       try {
-        let items = await DriveService.listFolder(this.document.id);
-        if (this.isSnippetsFolder) items = DriveService.purgeExpiredSnippets(items, this.document.id);
+        let items = await StorageService.listFolder(this.document.id);
+        if (this.isSnippetsFolder) items = StorageService.purgeExpiredSnippets(items, this.document.id);
         this.folderItems = items;
 
         // Check for home.md or index.md
         const defaultFile = items.find(f => !f.isFolder && (f.name === 'home.md' || f.name === 'index.md'));
         if (defaultFile) {
           this.defaultPageId = defaultFile.id;
-          this.defaultPageContent = await DriveService.getFileContent(defaultFile.id);
+          this.defaultPageContent = await StorageService.getFileContent(defaultFile.id);
           this.renderedHtml = MarkdownService.render(this.defaultPageContent);
           this.$nextTick(() => {
             MarkdownService.renderMermaid(this.$refs.mdContent);
@@ -159,7 +159,7 @@ const FolderViewer = {
       try {
         const fileName = 'home.md';
         const initialContent = '# ' + this.folderName + '\n\nStart writing here...\n';
-        await DriveService.createFile(fileName, this.document.id, initialContent);
+        await StorageService.createFile(fileName, this.document.id, initialContent);
         CacheService.remove('listing:' + this.document.id);
         this.$emit('toast', 'Page created', 'success');
         await this.load();

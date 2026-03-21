@@ -80,8 +80,8 @@ const SidebarTree = {
       if (!this.folderId) return;
       this.loading = true;
       try {
-        let all = await DriveService.listFolder(this.folderId);
-        all = DriveService.purgeExpiredSnippets(all, this.folderId);
+        let all = await StorageService.listFolder(this.folderId);
+        all = StorageService.purgeExpiredSnippets(all, this.folderId);
         // At root level, show special folders; deduplicate folder+file with same base name
         const deduped = {};
         for (const item of all) {
@@ -275,12 +275,12 @@ const Sidebar = {
       this.assetUploadCount = files.length;
       let success = 0;
       try {
-        const folderId = await DriveService.getAssetsFolderId();
+        const folderId = await StorageService.getAssetsFolderId();
         for (const file of files) {
           try {
             let name = file.name;
             if (!name || name === 'image.png') { const ext = file.type.split('/')[1] || 'bin'; name = 'pasted-' + Date.now() + '.' + ext; }
-            await DriveService.uploadBinary(name, folderId, file, file.type || 'application/octet-stream');
+            await StorageService.uploadBinary(name, folderId, file, file.type || 'application/octet-stream');
             success++;
           } catch (e) { this.$emit('toast', 'Failed to upload ' + file.name + ': ' + e.message, 'error'); }
         }

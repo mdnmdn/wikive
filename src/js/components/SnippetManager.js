@@ -138,7 +138,7 @@ const SnippetManager = {
       this.isCreating = false;
       this.isReadMode = true;
       try {
-        const meta = await DriveService.getFileMetadata(id);
+        const meta = await StorageService.getFileMetadata(id);
         this.selectedSnippet = {
             id: meta.id,
             name: meta.name,
@@ -151,7 +151,7 @@ const SnippetManager = {
         this.editType = this.selectedSnippet.type;
         this.editExpiry = this.selectedSnippet.duration;
         
-        const content = await DriveService.getFileContent(id);
+        const content = await StorageService.getFileContent(id);
         this.$nextTick(async () => {
           this.ensureEditor();
           this.editor.setValue(content || '', -1);
@@ -206,7 +206,7 @@ const SnippetManager = {
         const duration = this.editExpiry;
         const expiryTs = duration > 0 ? Date.now() + duration * 60000 : 0;
         if (this.selectedSnippet) {
-          await DriveService.updateSnippet(this.selectedSnippet.id, this.editName, content, this.editType, expiryTs, duration);
+          await StorageService.updateSnippet(this.selectedSnippet.id, this.editName, content, this.editType, expiryTs, duration);
           this.selectedSnippet = {
             ...this.selectedSnippet,
             name: this.editName,
@@ -219,7 +219,7 @@ const SnippetManager = {
           this.editor.setReadOnly(true);
           this.$emit('refresh-snippets');
         } else {
-          const res = await DriveService.createSnippet(this.editName || 'Untitled', content, this.editType, expiryTs, duration);
+          const res = await StorageService.createSnippet(this.editName || 'Untitled', content, this.editType, expiryTs, duration);
           this.$emit('refresh-snippets');
           this.isCreating = false;
           this.isReadMode = true;
@@ -246,7 +246,7 @@ const SnippetManager = {
     async deleteSnippet(s) {
       if (!confirm('Delete?')) return;
       try {
-        await DriveService.deleteFile(s.id);
+        await StorageService.deleteFile(s.id);
         this.$emit('refresh-snippets');
         window.location.hash = '#/_snippets';
       } catch (e) { this.$emit('toast', 'Error: ' + e.message, 'error'); }

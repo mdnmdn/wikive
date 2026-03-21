@@ -25,7 +25,7 @@ const LoginScreen = {
   `,
   methods: {
     login() {
-      AuthService.login();
+      AuthManager.login();
     },
   },
 };

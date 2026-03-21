@@ -190,7 +190,7 @@ const AssetViewer = {
     async loadItems() {
       if (!this.currentFolderId) return;
       this.loading = true;
-      try { this.items = await DriveService.listFolder(this.currentFolderId); }
+      try { this.items = await StorageService.listFolder(this.currentFolderId); }
       catch (e) { this.$emit('toast', 'Failed to load assets: ' + e.message, 'error'); this.items = []; }
       this.loading = false;
     },
@@ -219,7 +219,7 @@ const AssetViewer = {
         try {
           let name = file.name;
           if (!name || name === 'image.png') { const ext = file.type.split('/')[1] || 'bin'; name = 'pasted-' + Date.now() + '.' + ext; }
-          await DriveService.uploadBinary(name, this.currentFolderId, file, file.type || 'application/octet-stream');
+          await StorageService.uploadBinary(name, this.currentFolderId, file, file.type || 'application/octet-stream');
           success++;
         } catch (e) { this.$emit('toast', 'Failed to upload ' + file.name + ': ' + e.message, 'error'); }
       }
@@ -241,8 +241,8 @@ const AssetViewer = {
     isMarkdownFile(item) { return /\.(md|markdown)$/i.test(item.name); },
     fileExt(item) { const m = item.name.match(/\.([^.]+)$/); return m ? m[1].toUpperCase() : ''; },
     thumbnailUrl(item) {
-      const url = DriveService.getDownloadUrl(item.id);
-      const headers = DriveService.getAuthHeaders();
+      const url = StorageService.getDownloadUrl(item.id);
+      const headers = StorageService.getAuthHeaders();
       if (!item._thumbUrl) {
         item._thumbUrl = '';
         fetch(url, { headers }).then(r => r.blob()).then(blob => {
@@ -257,21 +257,21 @@ const AssetViewer = {
       this.previewing = item; this.previewEditing = false; this.previewText = '';
       if (this.isTextFile(item)) {
         this.previewLoading = true;
-        try { this.previewText = await DriveService.getFileContent(item.id); } catch (e) { this.previewText = 'Error: ' + e.message; }
+        try { this.previewText = await StorageService.getFileContent(item.id); } catch (e) { this.previewText = 'Error: ' + e.message; }
         this.previewLoading = false; this.previewSrc = '';
       } else {
         this.previewSrc = '';
-        try { const url = DriveService.getDownloadUrl(item.id); const headers = DriveService.getAuthHeaders(); const res = await fetch(url, { headers }); const blob = await res.blob(); this.previewSrc = URL.createObjectURL(blob); }
+        try { const url = StorageService.getDownloadUrl(item.id); const headers = StorageService.getAuthHeaders(); const res = await fetch(url, { headers }); const blob = await res.blob(); this.previewSrc = URL.createObjectURL(blob); }
         catch (e) { this.$emit('toast', 'Preview failed: ' + e.message, 'error'); }
       }
     },
     async savePreviewContent() {
       if (!this.previewing) return;
-      try { await DriveService.updateFile(this.previewing.id, this.previewText); this.previewEditing = false; this.$emit('toast', 'File saved', 'success'); }
+      try { await StorageService.updateFile(this.previewing.id, this.previewText); this.previewEditing = false; this.$emit('toast', 'File saved', 'success'); }
       catch (e) { this.$emit('toast', 'Save failed: ' + e.message, 'error'); }
     },
     async downloadItem(item) {
-      try { const url = DriveService.getDownloadUrl(item.id); const headers = DriveService.getAuthHeaders(); const res = await fetch(url, { headers }); const blob = await res.blob(); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = item.name; a.click(); URL.revokeObjectURL(a.href); }
+      try { const url = StorageService.getDownloadUrl(item.id); const headers = StorageService.getAuthHeaders(); const res = await fetch(url, { headers }); const blob = await res.blob(); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = item.name; a.click(); URL.revokeObjectURL(a.href); }
       catch (e) { this.$emit('toast', 'Download failed: ' + e.message, 'error'); }
     },
     renameItem(item) {
@@ -282,19 +282,19 @@ const AssetViewer = {
       if (!this.renaming || !this.renameValue.trim()) return;
       const item = this.renaming; const newName = this.renameValue.trim(); this.renaming = null;
       if (item._newFolder) {
-        try { await DriveService._createFolder(newName, this.currentFolderId); CacheService.remove('listing:' + this.currentFolderId); await this.loadItems(); this.$emit('toast', 'Folder created', 'success'); }
+        try { await StorageService.createFolder(newName, this.currentFolderId); CacheService.remove('listing:' + this.currentFolderId); await this.loadItems(); this.$emit('toast', 'Folder created', 'success'); }
         catch (e) { this.$emit('toast', 'Failed: ' + e.message, 'error'); }
         return;
       }
       if (newName === item.name) return;
-      try { await DriveService.renameFile(item.id, newName, this.currentFolderId); this.$emit('toast', 'Renamed to ' + newName, 'success'); CacheService.remove('listing:' + this.currentFolderId); await this.loadItems(); }
+      try { await StorageService.renameFile(item.id, newName, this.currentFolderId); this.$emit('toast', 'Renamed to ' + newName, 'success'); CacheService.remove('listing:' + this.currentFolderId); await this.loadItems(); }
       catch (e) { this.$emit('toast', 'Rename failed: ' + e.message, 'error'); }
     },
     deleteItem(item) { this.deleting = item; },
     async confirmDelete() {
       if (!this.deleting) return;
       const item = this.deleting; this.deleting = null;
-      try { await DriveService.deleteFile(item.id, this.currentFolderId); this.$emit('toast', item.name + ' deleted', 'success'); CacheService.remove('listing:' + this.currentFolderId); await this.loadItems(); }
+      try { await StorageService.deleteFile(item.id, this.currentFolderId); this.$emit('toast', item.name + ' deleted', 'success'); CacheService.remove('listing:' + this.currentFolderId); await this.loadItems(); }
       catch (e) { this.$emit('toast', 'Delete failed: ' + e.message, 'error'); }
     },
     async refreshAssets() { CacheService.remove('listing:' + this.currentFolderId); await this.loadItems(); this.$emit('toast', 'Assets refreshed', 'success'); },

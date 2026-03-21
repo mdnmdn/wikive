@@ -57,9 +57,9 @@ const PageView = {
 
       try {
         if (this.type === 'folder') {
-          this.folderItems = await DriveService.listFolder(this.resolved.id);
+          this.folderItems = await StorageService.listFolder(this.resolved.id);
         } else if (this.type === 'file') {
-          this.content = await DriveService.getFileContent(this.resolved.id);
+          this.content = await StorageService.getFileContent(this.resolved.id);
           this.renderedHtml = this.renderMarkdown(this.content);
         }
       } catch (e) {

@@ -99,14 +99,14 @@ const DrawingEditor = {
       if (isAuto) this._setAutosaveStatus('saving');
       try {
         if (this.document?.id) {
-          await DriveService.updateFile(this.document.id, jsonContent, { name: name + '.excalidraw' });
+          await StorageService.updateFile(this.document.id, jsonContent, { name: name + '.excalidraw' });
           this.lastSavedContent = jsonContent;
           if (!isAuto) this.$emit('toast', 'Drawing saved', 'success');
           if (isAuto) this._setAutosaveStatus('saved');
           this.$emit('save', { name: name + '.excalidraw' });
         } else {
-          const folderId = await DriveService.getDrawingsFolderId();
-          const data = await DriveService.createDrawing(name, jsonContent, folderId);
+          const folderId = await StorageService.getDrawingsFolderId();
+          const data = await StorageService.createDrawing(name, jsonContent, folderId);
           this.lastSavedContent = jsonContent;
           this.$emit('toast', 'Drawing created', 'success');
           this.$emit('save', { id: data.id, name: name + '.excalidraw' });
