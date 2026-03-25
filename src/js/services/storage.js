@@ -30,9 +30,10 @@ const StorageService = {
 
 // Bootstrap storage provider from config
 (function bootstrapStorage() {
-  if (!window.CONFIG) return;
-  const provider = CONFIG.PROVIDER || 'google-drive';
+  const config = typeof CONFIG !== 'undefined' ? CONFIG : window.CONFIG;
+  if (!config) return;
+  const provider = config.PROVIDER || 'google-drive';
   if (provider === 'google-drive') {
-    StorageService.setProvider(new GoogleDriveProvider(AuthManager, CONFIG));
+    StorageService.setProvider(new GoogleDriveProvider(AuthManager, config));
   }
 })();

@@ -22,11 +22,18 @@ js/renderers/
   DrawingEditor.js    — Excalidraw editor with save/fullscreen
   AssetViewer.js      — asset grid: preview, upload, rename, delete
   FolderViewer.js     — folder contents as cards, or home.md/index.md if present
+js/providers/
+  AuthProvider.js        — base contract for auth
+  PersistenceProvider.js — base contract for storage
+  GoogleAuthProvider.js  — Google-specific auth implementation
+  GoogleDriveProvider.js — Google-specific storage implementation
 js/services/
-  auth.js             — OAuth token lifecycle
+  auth-manager.js     — AuthManager facade (delegates to provider)
+  storage.js          — StorageService facade (delegates to provider)
+  auth.js             — Original AuthService (legacy)
   cache.js            — localStorage cache with TTL
   document.js         — document model, type detection, special folder helpers
-  drive.js            — Google Drive REST API wrapper
+  drive.js            — Original DriveService (legacy)
   renderer.js         — renderer registry (docType → component name)
 assets/
 ```
@@ -41,6 +48,8 @@ The architecture is built around three ideas:
 
 3. **Perspective** — the sidebar shows a single unified tree. Perspective filter buttons (All, Pages, Snippets, Drawings, Assets) narrow the tree to matching items. Special folders (`_snippets`, `_drawings`, `_assets`) auto-expand when their perspective is active.
 
+4. **Provider Abstraction** — the wiki decouples from any specific backend. Components interact with `AuthManager` and `StorageService` facades, which delegate to a `PROVIDER` (e.g. Google Drive, OneDrive). This makes the app extensible to any storage or auth backend.
+
 ## Tech stack (CDN & Local)
 - Vue 3 (global build) for UI composition.
 - Tailwind CSS for styling and utility classes.
@@ -54,14 +63,17 @@ The architecture is built around three ideas:
 
 ## Script loading and boot flow
 - `index.html` loads CDN libraries and the local Excalidraw web component script.
-- `config.js` defines OAuth client ID, Drive API endpoints, cache TTL, and scope.
-- Services (`cache.js`, `auth.js`, `drive.js`, `document.js`, `renderer.js`) load before renderers and components.
+- `config.js` defines PROVIDER, OAuth IDs, Drive API endpoints, and other settings.
+- Contracts (`AuthProvider.js`, `PersistenceProvider.js`) define the interface.
+- Implementations (`GoogleAuthProvider.js`, `GoogleDriveProvider.js`) implement the backend logic.
+- Service Facades (`auth-manager.js`, `storage.js`) bootstrap the correct provider from `CONFIG`.
 - Renderers load next (8 files under `js/renderers/`), then components.
 - `js/app.js` registers everything globally and mounts the Vue app.
 - Vue is pulled from `https://unpkg.com/vue@3/dist/vue.global.prod.js` to avoid a build step.
 
 ## Architecture approach
 - **No build step for main app**: plain HTML/CSS/JS with CDN dependencies.
+- **Provider-based storage**: easy to swap Google Drive for OneDrive or S3 by adding a new provider.
 - **Pre-built components**: Excalidraw is bundled as a web component using Vite to simplify embedding.
 - **Unified document model**: `DocumentService.toDocument()` normalises any Drive file into a standard shape. Type detection uses parent path, file extension, and `appProperties`.
 - **Renderer dispatch**: `DocumentRenderer` receives a `document` + `mode`, looks up the component name from `RendererService`, and renders via `<component :is="...">`. All renderers emit standard events (`@save`, `@delete`, `@toast`, `@mode-change`, `@navigate`).
@@ -93,11 +105,14 @@ The architecture is built around three ideas:
 
 | Service | File | Purpose |
 |---------|------|---------|
-| `AuthService` | `js/services/auth.js` | OAuth token lifecycle and user info |
-| `DriveService` | `js/services/drive.js` | CRUD for all file types, folder paths, binary uploads |
+| `AuthManager` | `js/services/auth-manager.js` | Main auth facade. Delegates to the current `AuthProvider`. |
+| `StorageService` | `js/services/storage.js` | Main storage facade. Delegates to the current `PersistenceProvider`. |
 | `CacheService` | `js/services/cache.js` | localStorage cache with TTL + stale-while-revalidate |
 | `DocumentService` | `js/services/document.js` | `toDocument()` normaliser, `resolveDocumentType()`, `getSpecialFolder()` |
 | `RendererService` | `js/services/renderer.js` | `getRenderer(docType, mode)` → component name, `canEdit(docType)` |
+| `AuthService` | `js/services/auth.js` | Legacy Google-only auth logic (now delegated). |
+| `DriveService` | `js/services/drive.js` | Legacy Google-only storage logic (now delegated). |
+
 
 ## Key components
 

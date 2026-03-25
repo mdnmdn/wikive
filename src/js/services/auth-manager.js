@@ -23,9 +23,10 @@ const AuthManager = {
 
 // Bootstrap auth provider from config
 (function bootstrapAuth() {
-  if (!window.CONFIG) return;
-  const provider = CONFIG.PROVIDER || 'google-drive';
+  const config = typeof CONFIG !== 'undefined' ? CONFIG : window.CONFIG;
+  if (!config) return;
+  const provider = config.PROVIDER || 'google-drive';
   if (provider === 'google-drive') {
-    AuthManager.setProvider(new GoogleAuthProvider(CONFIG));
+    AuthManager.setProvider(new GoogleAuthProvider(config));
   }
 })();
