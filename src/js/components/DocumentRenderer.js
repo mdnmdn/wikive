@@ -8,6 +8,7 @@ const DocumentRenderer = {
       :content="content"
       :dark-mode="darkMode"
       :mode="mode"
+      :is-shared-view="isSharedView"
       @save="$emit('save', $event)"
       @delete="$emit('delete')"
       @toast="(msg, type) => $emit('toast', msg, type)"
@@ -21,7 +22,7 @@ const DocumentRenderer = {
       Unknown document type
     </div>
   `,
-  props: ['document', 'content', 'mode', 'darkMode'],
+  props: ['document', 'content', 'mode', 'darkMode', 'isSharedView'],
   emits: ['save', 'delete', 'toast', 'mode-change', 'navigate', 'create-snippet', 'create-drawing'],
   computed: {
     componentName() {

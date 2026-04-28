@@ -23,6 +23,7 @@ const app = Vue.createApp({
         @refresh-page="refreshPage"
         @rename-move="showRenameMoveDialog"
         @clone="cloneDocument"
+        @share-anonymous="openAnonymousShareDialog"
         @toggle-notifications="showNotifications = !showNotifications"
         @clear-notifications="notifications = []; showNotifications = false"
         @navigate="onNavigate"
@@ -52,6 +53,7 @@ const app = Vue.createApp({
               :content="fileContent"
               :mode="mode"
               :dark-mode="darkMode"
+              :is-shared-view="false"
               @save="onRendererSave"
               @delete="deleteDocument"
               @toast="showToast"
@@ -131,6 +133,26 @@ const app = Vue.createApp({
           </div>
         </div>
       </div>
+      <div v-if="anonymousShareDialog.open" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="!anonymousShareDialog.loading && closeAnonymousShareDialog()">
+        <div class="rounded-xl shadow-xl p-6 w-full max-w-2xl mx-4" style="background-color: hsl(var(--background)); color: hsl(var(--foreground))">
+          <h3 class="text-lg font-semibold mb-2">Anonymous Share</h3>
+          <p class="text-sm mb-4" style="color: hsl(var(--muted-foreground))">Anyone with this link can open a read-only public view of this document without signing in.</p>
+          <div v-if="anonymousShareDialog.loading" class="flex items-center justify-center py-8"><div class="spinner"></div></div>
+          <div v-else>
+            <input
+              :value="anonymousShareDialog.url"
+              readonly
+              class="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none"
+              style="border-color: hsl(var(--border)); color: hsl(var(--foreground)); background-color: hsl(var(--muted))"
+            />
+            <p v-if="anonymousShareDialog.error" class="text-sm mt-3 text-red-500">{{ anonymousShareDialog.error }}</p>
+            <div class="flex justify-end gap-2 mt-4">
+              <button @click="closeAnonymousShareDialog" class="px-4 py-2 text-sm rounded-lg border hover:opacity-80" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))">Close</button>
+              <button @click="copyAnonymousShareUrl" :disabled="!anonymousShareDialog.url" class="px-4 py-2 text-sm rounded-lg disabled:opacity-50" style="background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground))">Copy Link</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </template>
   `,
   data() {
@@ -161,6 +183,12 @@ const app = Vue.createApp({
       notifications: [],
       presenceUsers: [],
       showNotifications: false,
+      anonymousShareDialog: {
+        open: false,
+        loading: false,
+        url: '',
+        error: '',
+      },
     };
   },
   computed: {
@@ -678,6 +706,59 @@ const app = Vue.createApp({
     showToast(message, type = 'info') {
       this.toast = { message, type };
       setTimeout(() => { this.toast = null; }, 3000);
+    },
+
+    closeAnonymousShareDialog() {
+      this.anonymousShareDialog.open = false;
+      this.anonymousShareDialog.loading = false;
+      this.anonymousShareDialog.error = '';
+    },
+
+    async openAnonymousShareDialog() {
+      const doc = this.document;
+      if (!doc?.id || doc.type !== 'file') return;
+
+      this.anonymousShareDialog.open = true;
+      this.anonymousShareDialog.loading = true;
+      this.anonymousShareDialog.url = '';
+      this.anonymousShareDialog.error = '';
+
+      try {
+        const shareInfo = await StorageService.enableAnonymousShare(doc.id);
+        this.anonymousShareDialog.url = this.buildAnonymousShareUrl(doc, shareInfo.publicUrl, shareInfo.resourceKey);
+      } catch (e) {
+        this.anonymousShareDialog.error = 'Failed to enable anonymous share: ' + e.message;
+      } finally {
+        this.anonymousShareDialog.loading = false;
+      }
+    },
+
+    buildAnonymousShareUrl(doc, publicUrl, resourceKey) {
+      const base = new URL('share.html', window.location.href.split('#')[0]);
+      base.searchParams.set('file', doc.id);
+      base.searchParams.set('type', doc.docType);
+      base.searchParams.set('name', doc.name || '');
+      base.searchParams.set('url', publicUrl || StorageService.getAnonymousShareUrl(doc.id));
+      if (resourceKey) base.searchParams.set('resourceKey', resourceKey);
+      if (CONFIG.WORKER_URL) {
+        const proxyUrl = new URL('/share-file', CONFIG.WORKER_URL);
+        proxyUrl.searchParams.set('file', doc.id);
+        if (resourceKey) proxyUrl.searchParams.set('resourceKey', resourceKey);
+        base.searchParams.set('proxy', proxyUrl.toString());
+      }
+      if (doc.meta?.syntaxType) base.searchParams.set('syntax', doc.meta.syntaxType);
+      if (doc.meta?.expiryTs) base.searchParams.set('expiry', String(doc.meta.expiryTs));
+      return base.toString();
+    },
+
+    async copyAnonymousShareUrl() {
+      if (!this.anonymousShareDialog.url) return;
+      try {
+        await navigator.clipboard.writeText(this.anonymousShareDialog.url);
+        this.showToast('Anonymous share link copied', 'success');
+      } catch (e) {
+        this.showToast('Copy failed: ' + e.message, 'error');
+      }
     },
   },
 });

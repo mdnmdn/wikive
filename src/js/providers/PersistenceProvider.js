@@ -24,6 +24,8 @@ class PersistenceProvider {
   getDownloadUrl(fileId) { throw new Error('Not implemented: getDownloadUrl'); }
   getAuthHeaders() { throw new Error('Not implemented: getAuthHeaders'); }
   async ensureHomePage(folderId) { throw new Error('Not implemented: ensureHomePage'); }
+  async enableAnonymousShare(fileId) { throw new Error('Not implemented: enableAnonymousShare'); }
+  getAnonymousShareUrl(fileId) { throw new Error('Not implemented: getAnonymousShareUrl'); }
   // Filter expired snippets from a listing and delete them in the background.
   // Default: returns items unchanged (no expiry concept on the backend).
   purgeExpiredSnippets(items, parentId) { return items; }

@@ -3,13 +3,15 @@
 ## File layout
 ```
 index.html
+share.html
 config.js
 css/app.css
 js/app.js
+js/share-app.js
 js/components/
-  AppHeader.js        — header bar, create dropdown, dark mode toggle
+  AppHeader.js        — header bar, create dropdown, dark mode toggle, anonymous share action
   Breadcrumb.js       — path breadcrumb with document-aware name resolution
-  DocumentRenderer.js — dispatcher: picks renderer by docType + mode
+  DocumentRenderer.js — dispatcher: picks renderer by docType + mode, including frameless shared view
   LoginScreen.js      — Google sign-in
   PageNotFound.js     — 404 with "create page" action
   Sidebar.js          — unified tree with perspective filters (SidebarTree + Sidebar)
@@ -50,6 +52,8 @@ The architecture is built around three ideas:
 
 4. **Provider Abstraction** — the wiki decouples from any specific backend. Components interact with `AuthManager` and `StorageService` facades, which delegate to a `PROVIDER` (e.g. Google Drive, OneDrive). This makes the app extensible to any storage or auth backend.
 
+5. **Anonymous Share Shell** — shared links open `share.html`, which mounts a stripped-down app that renders one document in read-only mode with no auth, header, sidebar, or editor chrome.
+
 ## Tech stack (CDN & Local)
 - Vue 3 (global build) for UI composition.
 - Tailwind CSS for styling and utility classes.
@@ -63,6 +67,7 @@ The architecture is built around three ideas:
 
 ## Script loading and boot flow
 - `index.html` loads CDN libraries and the local Excalidraw web component script.
+- `share.html` loads the same renderer stack but skips auth/bootstrap UI and mounts `js/share-app.js`.
 - `config.js` defines PROVIDER, OAuth IDs, Drive API endpoints, and other settings.
 - Contracts (`AuthProvider.js`, `PersistenceProvider.js`) define the interface.
 - Implementations (`GoogleAuthProvider.js`, `GoogleDriveProvider.js`) implement the backend logic.
@@ -77,6 +82,8 @@ The architecture is built around three ideas:
 - **Pre-built components**: Excalidraw is bundled as a web component using Vite to simplify embedding.
 - **Unified document model**: `DocumentService.toDocument()` normalises any Drive file into a standard shape. Type detection uses parent path, file extension, and `appProperties`.
 - **Renderer dispatch**: `DocumentRenderer` receives a `document` + `mode`, looks up the component name from `RendererService`, and renders via `<component :is="...">`. All renderers emit standard events (`@save`, `@delete`, `@toast`, `@mode-change`, `@navigate`).
+- **Anonymous share**: the main app asks the active provider to enable public read access on a file, then builds a `share.html` URL that includes the file id, document type, and renderer metadata needed for the unauthenticated shell.
+- **Shared fetch path**: for Google Drive, the frameless shared shell should fetch content through the optional Worker proxy because the public Drive download endpoint is not reliable for browser XHR.
 - **Minimal root state**: `js/app.js` holds one `document` object, `fileContent`, and `mode`. No per-type flags.
 - **Perspective-filtered sidebar**: one tree component, one search input, five filter buttons. No separate list components for snippets or drawings.
 
@@ -110,6 +117,7 @@ The architecture is built around three ideas:
 | `CacheService` | `js/services/cache.js` | localStorage cache with TTL + stale-while-revalidate |
 | `DocumentService` | `js/services/document.js` | `toDocument()` normaliser, `resolveDocumentType()`, `getSpecialFolder()` |
 | `RendererService` | `js/services/renderer.js` | `getRenderer(docType, mode)` → component name, `canEdit(docType)` |
+| `share-app` | `js/share-app.js` | Minimal unauthenticated app that fetches an anonymously shared file and mounts the correct read-only renderer. |
 | `AuthService` | `js/services/auth.js` | Legacy Google-only auth logic (now delegated). |
 | `DriveService` | `js/services/drive.js` | Legacy Google-only storage logic (now delegated). |
 
@@ -118,7 +126,7 @@ The architecture is built around three ideas:
 
 | Component | File | Role |
 |-----------|------|------|
-| `AppHeader` | `js/components/AppHeader.js` | Header bar with context-aware buttons. "+" dropdown creates any document type. Edit/Save/Delete buttons appear based on `document.docType` and `RendererService.canEdit()`. |
+| `AppHeader` | `js/components/AppHeader.js` | Header bar with context-aware buttons. "+" dropdown creates any document type. Edit/Save/Delete buttons appear based on `document.docType` and `RendererService.canEdit()`. It also exposes anonymous share for markdown pages, snippets, and drawings. |
 | `Breadcrumb` | `js/components/Breadcrumb.js` | Path breadcrumb. Resolves snippet IDs and drawing filenames to human-readable names using the `document` prop. |
 | `Sidebar` | `js/components/Sidebar.js` | Perspective filter buttons, search input, asset upload zone. Contains `SidebarTree` for recursive folder display. |
 | `SidebarTree` | `js/components/Sidebar.js` | Recursive tree component. Shows docType-aware icons (document, code, canvas, paperclip). Snippet items show expiry badges. Navigation uses file IDs for snippets/drawings. |

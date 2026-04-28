@@ -23,7 +23,7 @@ const SnippetViewer = {
     </div>
   `,
   mixins: [AceMixin],
-  props: ['document', 'content', 'mode', 'darkMode'],
+  props: ['document', 'content', 'mode', 'darkMode', 'isSharedView'],
   emits: ['toast'],
   computed: {
     timeLeftLabel() {

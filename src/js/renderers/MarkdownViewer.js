@@ -6,7 +6,7 @@ const MarkdownViewer = {
       <div v-else class="prose" ref="content" v-html="renderedHtml"></div>
     </div>
   `,
-  props: ['document', 'content', 'mode', 'darkMode'],
+  props: ['document', 'content', 'mode', 'darkMode', 'isSharedView'],
   emits: ['navigate', 'toast'],
   data() {
     return { loading: false, error: null, renderedHtml: '' };
@@ -28,7 +28,9 @@ const MarkdownViewer = {
       this.loading = false;
       this.$nextTick(() => {
         MarkdownService.renderMermaid(this.$refs.content);
-        MarkdownService.interceptLinks(this.$refs.content, this.document?.path, (path) => this.$emit('navigate', path));
+        MarkdownService.interceptLinks(this.$refs.content, this.document?.path, (path) => {
+          if (!this.isSharedView) this.$emit('navigate', path);
+        });
       });
     },
   },

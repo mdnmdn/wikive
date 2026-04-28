@@ -24,6 +24,10 @@ const AppHeader = {
         <button v-if="mode === 'view' && document" @click="$emit('refresh-page')" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))" title="Refresh">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         </button>
+        <button v-if="(mode === 'view' || document?.docType === 'drawing') && canAnonymousShare" @click="$emit('share-anonymous')" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))" title="Enable anonymous share">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C7.649 12.988 7 12.231 7 11.4c0-1.1 1.119-2 2.5-2 .781 0 1.478.288 1.936.738m1.88 3.123c1.035.354 1.684 1.111 1.684 1.94 0 1.1-1.119 2-2.5 2-.781 0-1.478-.288-1.936-.738M15 8l-6 8"/></svg>
+          Share
+        </button>
         <!-- Rename/Move: markdown pages only -->
         <button v-if="mode === 'view' && document && document.docType === 'markdown'" @click="$emit('rename-move')" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))" title="Rename / Move">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
@@ -128,13 +132,16 @@ const AppHeader = {
     </header>
   `,
   props: ['currentPath', 'mode', 'user', 'document', 'darkMode', 'notifications', 'showNotifications', 'presenceUsers'],
-  emits: ['edit', 'save', 'cancel', 'new-page', 'new-snippet', 'new-drawing', 'delete-page', 'toggle-dark', 'refresh-page', 'rename-move', 'clone', 'toggle-notifications', 'clear-notifications', 'navigate'],
+  emits: ['edit', 'save', 'cancel', 'new-page', 'new-snippet', 'new-drawing', 'delete-page', 'toggle-dark', 'refresh-page', 'rename-move', 'clone', 'share-anonymous', 'toggle-notifications', 'clear-notifications', 'navigate'],
   data() {
     return { showCreateMenu: false };
   },
   computed: {
     canEdit() {
       return this.document ? RendererService.canEdit(this.document.docType) : false;
+    },
+    canAnonymousShare() {
+      return this.document && this.document.type === 'file' && ['markdown', 'snippet', 'drawing'].includes(this.document.docType);
     },
     samePageUsers() {
       if (!this.presenceUsers || !this.currentPath) return [];

@@ -11,7 +11,7 @@ const DrawingViewer = {
             <svg v-if="!isFullscreen" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
             <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4l5 5m11-5l-5 5m-11 11l5-5m11 5l-5-5"/></svg>
           </button>
-          <button @click="downloadDrawing" class="p-1.5 rounded-md hover:bg-muted" title="Download">
+          <button v-if="downloadUrl" @click="downloadDrawing" class="p-1.5 rounded-md hover:bg-muted" title="Download">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
           </button>
         </div>
@@ -21,7 +21,7 @@ const DrawingViewer = {
       </div>
     </div>
   `,
-  props: ['document', 'content', 'mode', 'darkMode'],
+  props: ['document', 'content', 'mode', 'darkMode', 'isSharedView'],
   emits: ['toast'],
   data() {
     return { isFullscreen: false };
@@ -29,6 +29,9 @@ const DrawingViewer = {
   computed: {
     displayName() {
       return (this.document?.name || '').replace(/\.excalidraw$/, '') || 'Untitled';
+    },
+    downloadUrl() {
+      return this.document?.meta?.anonymousShareUrl || (!this.isSharedView ? StorageService.getDownloadUrl(this.document.id) : '');
     },
   },
   watch: {
@@ -44,8 +47,8 @@ const DrawingViewer = {
     async downloadDrawing() {
       if (!this.document) return;
       try {
-        const url = StorageService.getDownloadUrl(this.document.id);
-        const headers = StorageService.getAuthHeaders();
+        const url = this.document.meta?.anonymousShareUrl || StorageService.getDownloadUrl(this.document.id);
+        const headers = this.document.meta?.anonymousShareUrl ? {} : StorageService.getAuthHeaders();
         const res = await fetch(url, { headers });
         const blob = await res.blob();
         const a = document.createElement('a');

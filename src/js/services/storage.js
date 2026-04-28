@@ -21,7 +21,7 @@ const StorageService = {
   'getAssetsFolderId', 'getDrawingsFolderId', 'getSnippetsFolderId',
   'listSnippets', 'createSnippet', 'updateSnippet', 'createDrawing',
   'getDownloadUrl', 'getAuthHeaders', 'ensureHomePage', 'purgeExpiredSnippets',
-  'moveFile', 'copyFile',
+  'moveFile', 'copyFile', 'enableAnonymousShare', 'getAnonymousShareUrl',
 ].forEach(method => {
   StorageService[method] = function (...args) {
     return this.getProvider()[method](...args);

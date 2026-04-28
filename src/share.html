@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Shared Document</title>
+        <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        <link rel="manifest" href="/site.webmanifest" />
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+            tailwind.config = {
+                darkMode: "class",
+                theme: {
+                    extend: {
+                        colors: {
+                            border: "hsl(var(--border))",
+                            ring: "hsl(var(--ring))",
+                            background: "hsl(var(--background))",
+                            foreground: "hsl(var(--foreground))",
+                            primary: {
+                                DEFAULT: "hsl(var(--primary))",
+                                foreground: "hsl(var(--primary-foreground))",
+                            },
+                            muted: {
+                                DEFAULT: "hsl(var(--muted))",
+                                foreground: "hsl(var(--muted-foreground))",
+                            },
+                        },
+                    },
+                },
+            };
+        </script>
+        <style>
+            :root {
+                --background: 0 0% 100%;
+                --foreground: 240 10% 3.9%;
+                --muted: 260 30% 96%;
+                --muted-foreground: 260 8% 45%;
+                --accent: 260 20% 92%;
+                --accent-foreground: 268 90% 45%;
+                --primary: 268 90% 50%;
+                --primary-foreground: 0 0% 100%;
+                --secondary: 260 20% 92%;
+                --secondary-foreground: 268 90% 45%;
+                --destructive: 0 84.2% 60.2%;
+                --destructive-foreground: 0 0% 98%;
+                --border: 260 25% 88%;
+                --ring: 268 90% 50%;
+            }
+        </style>
+        <link
+            id="hljs-theme"
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"
+        />
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ace.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ext-language_tools.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/theme-github.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/theme-monokai.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/mode-markdown.min.js"></script>
+        <link rel="stylesheet" href="css/app.css" />
+        <script src="js/excalidraw-wc.umd.js"></script>
+    </head>
+    <body style="background-color: hsl(var(--background)); color: hsl(var(--foreground));">
+        <div id="app"></div>
+
+        <script src="config.js"></script>
+        <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+
+        <script src="js/services/document.js"></script>
+        <script src="js/services/renderer.js"></script>
+        <script src="js/services/markdown.js"></script>
+        <script src="js/services/ace-mixin.js"></script>
+
+        <script src="js/renderers/MarkdownViewer.js"></script>
+        <script src="js/renderers/SnippetViewer.js"></script>
+        <script src="js/renderers/DrawingViewer.js"></script>
+        <script src="js/components/DocumentRenderer.js"></script>
+        <script src="js/share-app.js"></script>
+    </body>
+</html>

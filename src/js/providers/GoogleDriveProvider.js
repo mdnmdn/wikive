@@ -428,6 +428,43 @@ class GoogleDriveProvider extends PersistenceProvider {
     return await res.json();
   }
 
+  async enableAnonymousShare(fileId) {
+    const res = await this._fetch(
+      `${this._config.DRIVE_API}/files/${fileId}/permissions?fields=permissions(id,type,role)`
+    );
+    const data = await res.json();
+    const existing = (data.permissions || []).find(permission =>
+      permission.type === 'anyone' && permission.role === 'reader'
+    );
+
+    if (!existing) {
+      await this._fetch(`${this._config.DRIVE_API}/files/${fileId}/permissions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'anyone',
+          role: 'reader',
+          allowFileDiscovery: false,
+        }),
+      });
+    }
+
+    const fileRes = await this._fetch(
+      `${this._config.DRIVE_API}/files/${fileId}?fields=id,resourceKey`
+    );
+    const fileData = await fileRes.json();
+
+    return {
+      fileId,
+      publicUrl: this.getAnonymousShareUrl(fileId),
+      resourceKey: fileData.resourceKey || '',
+    };
+  }
+
+  getAnonymousShareUrl(fileId) {
+    return `https://drive.usercontent.google.com/download?id=${encodeURIComponent(fileId)}&export=download`;
+  }
+
   async ensureHomePage(folderId) {
     const children = await this.listFolder(folderId);
     const homeFile = children.find(f => !f.isFolder && f.name === 'home.md');

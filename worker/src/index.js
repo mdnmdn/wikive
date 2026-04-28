@@ -17,6 +17,39 @@ export default {
       return json({ ok: true });
     }
 
+    // Public share proxy for anonymously shared Drive files.
+    // Avoids browser-side CORS/XHR restrictions on drive.usercontent.google.com.
+    if (url.pathname === '/share-file') {
+      const fileId = url.searchParams.get('file');
+      const resourceKey = url.searchParams.get('resourceKey') || '';
+      if (!fileId) {
+        return json({ error: 'file parameter required' }, 400);
+      }
+
+      const upstreamUrl = new URL('https://drive.usercontent.google.com/download');
+      upstreamUrl.searchParams.set('id', fileId);
+      upstreamUrl.searchParams.set('export', 'download');
+
+      const headers = {};
+      if (resourceKey) {
+        headers['X-Goog-Drive-Resource-Keys'] = `${fileId}/${resourceKey}`;
+      }
+
+      const upstream = await fetch(upstreamUrl.toString(), { headers });
+      if (!upstream.ok) {
+        return json({ error: 'upstream fetch failed', status: upstream.status }, upstream.status);
+      }
+
+      return new Response(upstream.body, {
+        status: upstream.status,
+        headers: {
+          'Content-Type': upstream.headers.get('Content-Type') || 'application/octet-stream',
+          'Cache-Control': 'public, max-age=300',
+          ...corsHeaders(),
+        },
+      });
+    }
+
     // WebSocket endpoint: /ws?room=<rootFolderName>&token=<google_access_token>
     if (url.pathname === '/ws') {
       const room = url.searchParams.get('room');

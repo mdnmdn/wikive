@@ -86,6 +86,8 @@ All storage providers must extend `PersistenceProvider` and implement these meth
 | `getDownloadUrl` | `(fileId)` | `string` | URL to download file content |
 | `getAuthHeaders` | `()` | `object` | Auth headers for download requests |
 | `ensureHomePage` | `(folderId)` | `void` | Create home.md if missing |
+| `enableAnonymousShare` | `(fileId)` | `object` | Make a file publicly readable using the provider’s built-in sharing model |
+| `getAnonymousShareUrl` | `(fileId)` | `string` | Public unauthenticated content URL for an anonymously shared file |
 | `purgeExpiredSnippets` | `(items, parentId)` | `Array` | Filter + delete expired snippets |
 | `moveFile` | `(fileId, newName, oldParentId, newParentId)` | `object` | Move and/or rename a file |
 | `copyFile` | `(fileId, name, parentId)` | `object` | Copy a file |
@@ -144,6 +146,8 @@ Use `GoogleDriveProvider.js` as a reference. Key considerations:
 - **Metadata storage**: Google Drive uses `appProperties` for snippet metadata. Other backends may use custom headers (S3), file properties (OneDrive), or a sidecar JSON file.
 - **Caching**: Use `CacheService` internally for the same stale-while-revalidate pattern.
 - **Auth headers**: `getAuthHeaders()` should return whatever headers are needed to fetch download URLs. For presigned URLs (S3), return `{}`.
+- **Anonymous share**: Providers that support public links should implement `enableAnonymousShare()` and `getAnonymousShareUrl()`. The app uses those methods to expose a copyable `share.html` link that opens a read-only renderer without authentication.
+- **Public download constraints**: Some providers expose public download URLs that work for top-level navigation but not browser XHR. In those cases the app may need a lightweight proxy layer for the frameless shared renderer.
 
 ### 3. Add script tags to index.html
 
@@ -194,6 +198,9 @@ const CONFIG = {
 - Files identified by opaque IDs
 - Metadata stored in `appProperties`
 - Auth via Google Identity Services OAuth2 token flow
+- Anonymous sharing is implemented with the Drive permissions API by adding an `anyone` / `reader` permission, then using the public `https://drive.usercontent.google.com/download?id=...&export=download` URL as the content source for `share.html`
+- If Drive returns a `resourceKey` for the file, the provider must pass it through so the unauthenticated share shell can send the `X-Goog-Drive-Resource-Keys` header when fetching content
+- Because the Drive public download endpoint may reject browser XHR even when direct navigation works, the recommended shared-renderer path is to fetch the file through the optional Worker `/share-file` proxy
 
 ### OneDrive (future)
 - Would use Microsoft Graph API
