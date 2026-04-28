@@ -1,32 +1,15 @@
 const AssetViewer = {
   template: `
     <div class="asset-manager px-10 py-8">
-      <div class="flex items-start justify-between mb-4">
-        <div>
-          <h1 class="text-2xl font-bold" style="color: hsl(var(--foreground))">Assets</h1>
-          <nav class="flex items-center gap-1 text-sm mt-1" style="color: hsl(var(--muted-foreground))" v-if="folderStack.length > 0">
-            <a href="#" @click.prevent="navigateToRoot" class="hover:opacity-80">_assets</a>
-            <template v-for="(f, i) in folderStack" :key="f.id">
-              <span class="opacity-40">/</span>
-              <a href="#" @click.prevent="navigateToFolder(i)" class="hover:opacity-80">{{ f.name }}</a>
-            </template>
-          </nav>
-        </div>
-        <div class="flex items-center gap-2">
-          <input v-model="searchQuery" type="text" placeholder="Search assets..." class="px-3 py-1.5 text-sm rounded-md border focus:outline-none focus:ring-2 focus:ring-primary" style="border-color: hsl(var(--border)); background-color: hsl(var(--background)); color: hsl(var(--foreground))" />
-          <button @click="refreshAssets" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))" title="Refresh">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-          </button>
-          <label class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors cursor-pointer" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-            Upload
-            <input type="file" multiple class="hidden" @change="onFileInput" ref="fileInput" />
-          </label>
-          <button @click="createSubfolder" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))" title="New subfolder">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
-          </button>
-        </div>
-      </div>
+      <nav v-if="folderStack.length > 0" class="flex items-center gap-1 text-sm mb-4" style="color: hsl(var(--muted-foreground))">
+        <a href="#" @click.prevent="navigateToRoot" class="hover:opacity-80">_assets</a>
+        <template v-for="(f, i) in folderStack" :key="f.id">
+          <span class="opacity-40">/</span>
+          <a href="#" @click.prevent="navigateToFolder(i)" class="hover:opacity-80">{{ f.name }}</a>
+        </template>
+      </nav>
+      <!-- hidden file input for upload triggered from header -->
+      <input type="file" multiple class="hidden" @change="onFileInput" ref="fileInput" />
       <div v-if="loading" class="flex justify-center py-8"><div class="spinner"></div></div>
       <div v-else-if="items.length === 0" class="text-center py-8" style="color: hsl(var(--muted-foreground))">No assets yet. Upload files to get started.</div>
       <div v-else-if="filteredItems.length === 0" class="text-center py-8" style="color: hsl(var(--muted-foreground))">No assets match your search.</div>
@@ -144,20 +127,21 @@ const AssetViewer = {
       </div>
     </div>
   `,
+  inject: ['rendererState'],
   props: ['document', 'content', 'mode', 'darkMode'],
   emits: ['toast', 'save'],
   data() {
     return {
       items: [], loading: false, currentFolderId: null, folderStack: [],
       previewing: null, previewSrc: '', previewText: '', previewLoading: false, previewEditing: false,
-      renaming: null, renameValue: '', deleting: null, searchQuery: '',
+      renaming: null, renameValue: '', deleting: null,
     };
   },
   computed: {
     renderedPreviewMd() { return this.previewText ? marked.parse(this.previewText) : ''; },
     filteredItems() {
-      if (!this.searchQuery.trim()) return this.items;
-      const q = this.searchQuery.toLowerCase();
+      const q = this.rendererState?.assetSearch?.trim()?.toLowerCase();
+      if (!q) return this.items;
       return this.items.filter(i => i.name.toLowerCase().includes(q));
     },
   },
@@ -205,6 +189,7 @@ const AssetViewer = {
       try { await navigator.clipboard.writeText(path); this.$emit('toast', 'Copied: ' + path, 'success'); }
       catch { const ta = document.createElement('textarea'); ta.value = path; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); this.$emit('toast', 'Copied: ' + path, 'success'); }
     },
+    triggerUpload() { this.$refs.fileInput?.click(); },
     onFileInput(e) { const files = e.target.files; if (files.length) this.uploadFiles(Array.from(files)); e.target.value = ''; },
     onPaste(e) {
       if (e.defaultPrevented || !this.currentFolderId) return;

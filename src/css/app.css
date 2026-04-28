@@ -54,12 +54,16 @@ html, body, #app {
   height: 100%;
 }
 
+/* Pointer cursor for all interactive elements */
+button { cursor: pointer; }
+
 /* Sidebar Nav Buttons */
 .nav-btn {
   padding: 0.5rem;
   border-radius: 0.5rem;
   color: hsl(var(--muted-foreground));
   transition: all 0.2s;
+  cursor: pointer;
 }
 
 .nav-btn:hover {

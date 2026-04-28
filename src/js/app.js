@@ -27,6 +27,13 @@ const app = Vue.createApp({
         @toggle-notifications="showNotifications = !showNotifications"
         @clear-notifications="notifications = []; showNotifications = false"
         @navigate="onNavigate"
+        @drawing-save="onDrawingSave"
+        @drawing-toggle-autosave="$refs.renderer?.triggerToggleAutosave()"
+        @drawing-toggle-fullscreen="$refs.renderer?.triggerToggleFullscreen()"
+        @snippet-copy="$refs.renderer?.triggerCopy()"
+        @asset-refresh="$refs.renderer?.triggerRefreshAssets()"
+        @asset-upload="$refs.renderer?.triggerUpload()"
+        @asset-create-subfolder="$refs.renderer?.triggerCreateSubfolder()"
       ></app-header>
       <div class="app-body">
         <sidebar
@@ -97,10 +104,28 @@ const app = Vue.createApp({
           </div>
         </div>
       </div>
+      <!-- New Drawing dialog -->
+      <div v-if="showNewDrawing" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="showNewDrawing = false">
+        <div class="rounded-xl shadow-xl p-6 w-full max-w-md mx-4" style="background-color: hsl(var(--background)); color: hsl(var(--foreground))">
+          <h3 class="text-lg font-semibold mb-4">New Drawing</h3>
+          <input
+            v-model="newDrawingName"
+            @keyup.enter="newDrawingName.trim() && doCreateNewDrawing(newDrawingName)"
+            class="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            style="border-color: hsl(var(--border)); color: hsl(var(--foreground)); background-color: hsl(var(--background))"
+            placeholder="Drawing name"
+            ref="newDrawingInput"
+          />
+          <div class="flex justify-end gap-2 mt-4">
+            <button @click="showNewDrawing = false" class="px-4 py-2 text-sm rounded-lg border hover:opacity-80" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))">Cancel</button>
+            <button @click="doCreateNewDrawing(newDrawingName)" :disabled="!newDrawingName.trim()" class="px-4 py-2 text-sm rounded-lg disabled:opacity-50" style="background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground))">Create</button>
+          </div>
+        </div>
+      </div>
       <!-- Rename/Move dialog -->
       <div v-if="showRenameMove" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="!renamingMoving && (showRenameMove = false)">
         <div class="rounded-xl shadow-xl p-6 w-full max-w-md mx-4" style="background-color: hsl(var(--background)); color: hsl(var(--foreground))">
-          <h3 class="text-lg font-semibold mb-4">Rename / Move Page</h3>
+          <h3 class="text-lg font-semibold mb-4">{{ renameMoveTitle }}</h3>
           <input
             v-model="renameMoveValue"
             @keyup.enter="!renamingMoving && renameMovePage(renameMoveValue)"
@@ -109,7 +134,7 @@ const app = Vue.createApp({
             style="border-color: hsl(var(--border)); color: hsl(var(--foreground)); background-color: hsl(var(--background))"
             ref="renameMoveInput"
           />
-          <p class="text-xs mt-2" style="color: hsl(var(--muted-foreground))">Use / to move to a different folder. Folders are created automatically.</p>
+          <p v-if="document?.docType === 'markdown'" class="text-xs mt-2" style="color: hsl(var(--muted-foreground))">Use / to move to a different folder. Folders are created automatically.</p>
           <div class="flex justify-end gap-2 mt-4">
             <button @click="showRenameMove = false" :disabled="renamingMoving" class="px-4 py-2 text-sm rounded-lg border hover:opacity-80 disabled:opacity-50" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))">Cancel</button>
             <button @click="renameMovePage(renameMoveValue)" :disabled="renamingMoving" class="px-4 py-2 text-sm rounded-lg flex items-center gap-2 disabled:opacity-50" style="background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground))">
@@ -155,8 +180,20 @@ const app = Vue.createApp({
       </div>
     </template>
   `,
+  provide() {
+    return { rendererState: this.rendererState };
+  },
   data() {
     return {
+      rendererState: {
+        drawingAutosave: false,
+        drawingAutosaveStatus: '',
+        drawingSaving: false,
+        drawingFullscreen: false,
+        snippetType: 'markdown',
+        snippetExpiry: 1440,
+        assetSearch: '',
+      },
       authenticated: false,
       user: null,
       rootId: null,
@@ -176,6 +213,9 @@ const app = Vue.createApp({
       pendingEditPath: null,
       pendingNewSnippet: false,
       pendingNewDrawing: false,
+      showNewDrawing: false,
+      newDrawingName: '',
+      pendingNewDrawingName: '',
       confirmDialog: null,
       showRenameMove: false,
       renameMoveValue: '',
@@ -192,6 +232,12 @@ const app = Vue.createApp({
     };
   },
   computed: {
+    renameMoveTitle() {
+      const dt = this.document?.docType;
+      if (dt === 'drawing') return 'Rename Drawing';
+      if (dt === 'snippet') return 'Rename Snippet';
+      return 'Rename / Move Page';
+    },
     mainContentClass() {
       const dt = this.document?.docType;
       return {
@@ -309,7 +355,7 @@ const app = Vue.createApp({
         if (this.pendingNewSnippet && this.currentPath === '_snippets') {
           this.pendingNewSnippet = false;
           const doc = DocumentService.toDocument(
-            { id: null, name: '', isFolder: false }, null, '_snippets'
+            { id: null, name: this._generateSnippetName(), isFolder: false }, null, '_snippets'
           );
           doc.docType = 'snippet';
           doc.type = 'file';
@@ -322,8 +368,10 @@ const app = Vue.createApp({
         if (this.pendingNewDrawing && this.currentPath === '_drawings') {
           this.pendingNewDrawing = false;
           const folderId = await StorageService.getDrawingsFolderId();
+          const drawingName = this.pendingNewDrawingName || '';
+          this.pendingNewDrawingName = '';
           const doc = DocumentService.toDocument(
-            { id: null, name: '', isFolder: false }, folderId, '_drawings'
+            { id: null, name: drawingName, isFolder: false }, folderId, '_drawings'
           );
           doc.docType = 'drawing';
           doc.type = 'file';
@@ -426,6 +474,11 @@ const app = Vue.createApp({
     async save() {
       const renderer = this.$refs.renderer;
       if (!renderer) return;
+      // Snippets handle their own save (metadata + content)
+      if (this.document?.docType === 'snippet') {
+        await renderer.triggerSave();
+        return;
+      }
       const content = renderer.getContent();
       try {
         if (this.document && this.document.type === 'file') {
@@ -440,15 +493,31 @@ const app = Vue.createApp({
       }
     },
 
+    async onDrawingSave() {
+      await this.$refs.renderer?.triggerSave();
+    },
+
     onModeChange(newMode) {
       this.mode = newMode;
     },
 
-    onRendererSave(data) {
+    async onRendererSave(data) {
       // Renderer handled its own save (snippets, drawings)
-      // Clear parent listing cache so renames show immediately in the sidebar
+      // Clear parent listing cache so new items appear in the sidebar
       if (this.document?.parentId) {
         CacheService.remove('listing:' + this.document.parentId);
+      } else {
+        // New document (parentId not yet set) — clear its folder cache
+        const dt = this.document?.docType;
+        try {
+          if (dt === 'snippet') {
+            const fid = await StorageService.getSnippetsFolderId();
+            if (fid) CacheService.remove('listing:' + fid);
+          } else if (dt === 'drawing') {
+            const fid = await StorageService.getDrawingsFolderId();
+            if (fid) CacheService.remove('listing:' + fid);
+          }
+        } catch {}
       }
       if (typeof RealtimeService !== 'undefined') RealtimeService.notifyUpdate('save', this.currentPath, this.document?.docType);
       this.refreshSidebar();
@@ -516,6 +585,16 @@ const app = Vue.createApp({
     },
 
     createNewDrawing() {
+      this.newDrawingName = '';
+      this.showNewDrawing = true;
+      this.$nextTick(() => this.$refs.newDrawingInput?.focus());
+    },
+
+    doCreateNewDrawing(name) {
+      name = (name || '').trim();
+      if (!name) return;
+      this.pendingNewDrawingName = name;
+      this.showNewDrawing = false;
       if (this.currentPath === '_drawings') {
         this.pendingNewDrawing = true;
         this.onRouteChange();
@@ -614,6 +693,7 @@ const app = Vue.createApp({
         if (this.confirmDialog) { this.confirmDialog.reject(); return; }
         if (this.showRenameMove) { if (!this.renamingMoving) this.showRenameMove = false; return; }
         if (this.showNewPage) { if (!this.creatingPage) this.showNewPage = false; return; }
+        if (this.showNewDrawing) { this.showNewDrawing = false; return; }
         if (this.mode === 'edit') { this.cancelEdit(); return; }
       }
       const meta = e.metaKey || e.ctrlKey;
@@ -637,7 +717,15 @@ const app = Vue.createApp({
     },
 
     showRenameMoveDialog() {
-      this.renameMoveValue = this.currentPath;
+      const doc = this.document;
+      if (!doc) return;
+      if (doc.docType === 'drawing') {
+        this.renameMoveValue = (doc.name || '').replace(/\.excalidraw$/, '');
+      } else if (doc.docType === 'snippet') {
+        this.renameMoveValue = doc.name || '';
+      } else {
+        this.renameMoveValue = this.currentPath;
+      }
       this.showRenameMove = true;
       this.$nextTick(() => {
         const el = this.$refs.renameMoveInput;
@@ -645,12 +733,47 @@ const app = Vue.createApp({
       });
     },
 
-    async renameMovePage(newPath) {
-      newPath = (newPath || '').trim();
-      if (!newPath || newPath === this.currentPath) { this.showRenameMove = false; return; }
+    async renameMovePage(newValue) {
+      newValue = (newValue || '').trim();
+      if (!newValue) { this.showRenameMove = false; return; }
+      const docType = this.document?.docType;
+
+      if (docType === 'drawing') {
+        const newName = newValue.replace(/\.excalidraw$/, '') + '.excalidraw';
+        if (newName === this.document.name) { this.showRenameMove = false; return; }
+        this.renamingMoving = true;
+        try {
+          await StorageService.renameFile(this.document.id, newName, this.document.parentId);
+          this.document = { ...this.document, name: newName };
+          CacheService.remove('listing:' + this.document.parentId);
+          this.showToast('Drawing renamed', 'success');
+          this.showRenameMove = false;
+          this.refreshSidebar();
+        } catch (e) { this.showToast('Failed: ' + e.message, 'error'); }
+        this.renamingMoving = false;
+        return;
+      }
+
+      if (docType === 'snippet') {
+        if (newValue === this.document.name) { this.showRenameMove = false; return; }
+        this.renamingMoving = true;
+        try {
+          await StorageService.renameFile(this.document.id, newValue, this.document.parentId);
+          this.document = { ...this.document, name: newValue };
+          CacheService.remove('listing:' + this.document.parentId);
+          this.showToast('Snippet renamed', 'success');
+          this.showRenameMove = false;
+          this.refreshSidebar();
+        } catch (e) { this.showToast('Failed: ' + e.message, 'error'); }
+        this.renamingMoving = false;
+        return;
+      }
+
+      // Markdown: path-based rename/move
+      if (newValue === this.currentPath) { this.showRenameMove = false; return; }
       this.renamingMoving = true;
       try {
-        const segments = newPath.split('/').filter(Boolean);
+        const segments = newValue.split('/').filter(Boolean);
         const newFileName = segments.pop() + '.md';
         let newParentId;
         if (segments.length > 0) {
@@ -662,8 +785,8 @@ const app = Vue.createApp({
         CacheService.remove('path:' + this.currentPath);
         this.showToast('Page moved', 'success');
         this.showRenameMove = false;
-        this.refreshSidebar(newPath);
-        window.location.hash = '#/' + newPath;
+        this.refreshSidebar(newValue);
+        window.location.hash = '#/' + newValue;
       } catch (e) {
         this.showToast('Failed: ' + e.message, 'error');
       }
@@ -701,6 +824,18 @@ const app = Vue.createApp({
       } catch (e) {
         this.showToast('Failed to clone: ' + e.message, 'error');
       }
+    },
+
+    _generateSnippetName() {
+      const now = new Date();
+      const yy = String(now.getFullYear()).slice(2);
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const hh = String(now.getHours()).padStart(2, '0');
+      const min = String(now.getMinutes()).padStart(2, '0');
+      const extMap = { markdown: 'md', javascript: 'js', python: 'py', html: 'html', css: 'css', json: 'json', yaml: 'yml', sh: 'sh', typescript: 'ts', golang: 'go', java: 'java', rust: 'rs', ruby: 'rb', sql: 'sql', xml: 'xml', text: 'txt' };
+      const ext = extMap[this.rendererState.snippetType] || 'txt';
+      return `snip-${yy}${mm}${dd}-${hh}-${min}.${ext}`;
     },
 
     showToast(message, type = 'info') {

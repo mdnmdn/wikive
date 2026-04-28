@@ -34,5 +34,16 @@ const DocumentRenderer = {
     getContent() {
       return this.$refs.renderer?.getContent?.() || this.content;
     },
+    triggerSave() {
+      const docType = this.document?.docType;
+      if (docType === 'snippet') return this.$refs.renderer?.saveSnippet?.();
+      if (docType === 'drawing') return this.$refs.renderer?.saveDrawing?.();
+    },
+    triggerCopy() { return this.$refs.renderer?.copyToClipboard?.(); },
+    triggerRefreshAssets() { return this.$refs.renderer?.refreshAssets?.(); },
+    triggerUpload() { return this.$refs.renderer?.triggerUpload?.(); },
+    triggerCreateSubfolder() { return this.$refs.renderer?.createSubfolder?.(); },
+    triggerToggleAutosave() { return this.$refs.renderer?.toggleAutosave?.(); },
+    triggerToggleFullscreen() { return this.$refs.renderer?.toggleFullscreen?.(); },
   },
 };

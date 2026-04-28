@@ -8,31 +8,6 @@ const FolderViewer = {
       </template>
       <!-- Otherwise show folder contents as cards -->
       <template v-else>
-        <div class="flex items-center justify-between mb-6">
-          <h1 class="text-2xl font-bold" style="color: hsl(var(--foreground))">{{ folderName }}</h1>
-          <!-- Snippet folder: + Snippet button -->
-          <button v-if="isSnippetsFolder" @click="$emit('create-snippet')" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md hover:opacity-90 transition-colors" style="background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground))">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            New Snippet
-          </button>
-          <!-- Drawings folder: + Drawing button -->
-          <button v-else-if="isDrawingsFolder" @click="$emit('create-drawing')" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md hover:opacity-90 transition-colors" style="background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground))">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            New Drawing
-          </button>
-          <!-- Regular wiki folder: Create Page button -->
-          <button v-else-if="!isSpecialFolder" @click="createDefaultPage" :disabled="creatingPage" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md hover:opacity-90 transition-colors disabled:opacity-50" style="background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground))">
-            <template v-if="creatingPage">
-              <div class="spinner" style="width:0.875rem;height:0.875rem;border-width:1px;border-color:hsl(var(--primary-foreground)/0.3);border-top-color:hsl(var(--primary-foreground))"></div>
-              Creating…
-            </template>
-            <template v-else>
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-              Create Page
-            </template>
-          </button>
-        </div>
-
         <div v-if="folderItems.length === 0" class="text-center py-12" style="color: hsl(var(--muted-foreground))">
           <svg class="w-16 h-16 mx-auto mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
           <p class="text-sm">{{ isSnippetsFolder ? 'No snippets yet.' : 'This folder is empty.' }}</p>
