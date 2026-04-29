@@ -2,6 +2,12 @@
 const CacheService = {
   _prefix: 'wiki:',
 
+  // Call once after login to namespace cache per user so different accounts don't share entries.
+  setUser(email) {
+    const safe = (email || '').toLowerCase().replace(/[^a-z0-9@._-]/g, '');
+    this._prefix = safe ? `wiki:${safe}:` : 'wiki:';
+  },
+
   get(key) {
     try {
       const raw = localStorage.getItem(this._prefix + key);

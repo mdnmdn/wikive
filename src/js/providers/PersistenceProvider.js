@@ -29,4 +29,14 @@ class PersistenceProvider {
   // Filter expired snippets from a listing and delete them in the background.
   // Default: returns items unchanged (no expiry concept on the backend).
   purgeExpiredSnippets(items, parentId) { return items; }
+
+  // Override the effective root folder name at runtime (for dynamic wiki selection).
+  setRootFolderName(name) {}
+
+  // Read the list of wikis stored in the provider-level definitions file.
+  // Returns { id: string|null, wikis: Array<{wikiName, rootFolder}> }
+  async getWikiDefinitions() { return { id: null, wikis: [] }; }
+
+  // Persist the updated wikis list to the provider-level definitions file.
+  async saveWikiDefinitions(wikis) {}
 }

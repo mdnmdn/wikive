@@ -19,6 +19,10 @@ const AuthManager = {
   logout()           { return this._provider.logout(); },
   getToken()         { return this._provider.getToken(); },
   isLoggedIn()       { return this._provider.isLoggedIn(); },
+  loginWithHint(e)   { return this._provider.loginWithHint(e); },
+  switchUser(e)      { return this._provider.switchUser(e); },
+  addNewUser()       { return this._provider.addNewUser(); },
+  getKnownUsers()    { return this._provider.getKnownUsers(); },
 };
 
 // Bootstrap auth provider from config

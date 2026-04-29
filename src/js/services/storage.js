@@ -22,6 +22,7 @@ const StorageService = {
   'listSnippets', 'createSnippet', 'updateSnippet', 'createDrawing',
   'getDownloadUrl', 'getAuthHeaders', 'ensureHomePage', 'purgeExpiredSnippets',
   'moveFile', 'copyFile', 'enableAnonymousShare', 'getAnonymousShareUrl',
+  'setRootFolderName', 'getWikiDefinitions', 'saveWikiDefinitions',
 ].forEach(method => {
   StorageService[method] = function (...args) {
     return this.getProvider()[method](...args);

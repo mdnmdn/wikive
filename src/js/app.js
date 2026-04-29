@@ -2,6 +2,95 @@
 const app = Vue.createApp({
   template: `
     <login-screen v-if="!authenticated"></login-screen>
+
+    <!-- ═══ WIKI SELECTION (shown after auth, before a wiki is connected) ═══ -->
+    <template v-else-if="!wikiReady">
+      <div class="flex items-center justify-center min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-purple-100">
+        <div class="bg-white rounded-xl shadow-lg p-8 max-w-md w-full mx-4 text-center" style="color: hsl(var(--foreground))">
+          <img src="/assets/logo.jpg" alt="Wiki Logo" class="w-20 h-auto mx-auto mb-5 rounded-lg" />
+
+          <!-- Loading wiki definitions -->
+          <div v-if="wikiLoading" class="flex flex-col items-center gap-3 py-4">
+            <div class="spinner"></div>
+            <p class="text-sm" style="color: hsl(var(--muted-foreground))">Loading wikis…</p>
+          </div>
+
+          <!-- Wiki picker -->
+          <div v-else-if="showWikiSelector">
+            <h2 class="text-lg font-semibold mb-1">Select a Wiki</h2>
+            <p class="text-sm mb-5" style="color: hsl(var(--muted-foreground))">Choose which wiki to open</p>
+            <div class="space-y-2 mb-4">
+              <button
+                v-for="wiki in wikiList"
+                :key="wiki.wikiName"
+                @click="selectWiki(wiki)"
+                class="w-full text-left px-4 py-3 rounded-lg border hover:opacity-80 transition-colors flex items-center justify-between"
+                style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))"
+              >
+                <span class="font-medium">{{ wiki.wikiName }}</span>
+                <span class="text-xs" style="color: hsl(var(--muted-foreground))">{{ wiki.rootFolder }}</span>
+              </button>
+            </div>
+            <button
+              @click="showWikiSelector = false; showNewWikiDialog = true; $nextTick(() => $refs.newWikiNameInput?.focus())"
+              class="w-full py-2 text-sm rounded-lg border transition-colors"
+              style="border-color: hsl(var(--primary)); color: hsl(var(--primary))"
+            >+ New Wiki</button>
+          </div>
+
+          <!-- New wiki form -->
+          <div v-else-if="showNewWikiDialog">
+            <h2 class="text-lg font-semibold mb-1">{{ wikiList.length === 0 ? 'Create Your First Wiki' : 'New Wiki' }}</h2>
+            <p class="text-sm mb-5" style="color: hsl(var(--muted-foreground))">Choose a name and where to store pages in Google Drive</p>
+            <div class="space-y-3 mb-5 text-left">
+              <div>
+                <label class="block text-xs font-medium mb-1" style="color: hsl(var(--muted-foreground))">Wiki name</label>
+                <input
+                  v-model="newWikiName"
+                  @keyup.enter="!creatingWiki && createWikiAndConnect()"
+                  :disabled="creatingWiki"
+                  class="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                  style="border-color: hsl(var(--border))"
+                  placeholder="default"
+                  ref="newWikiNameInput"
+                />
+              </div>
+              <div>
+                <label class="block text-xs font-medium mb-1" style="color: hsl(var(--muted-foreground))">Root folder in Google Drive</label>
+                <input
+                  v-model="newWikiFolder"
+                  @keyup.enter="!creatingWiki && createWikiAndConnect()"
+                  :disabled="creatingWiki"
+                  class="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                  style="border-color: hsl(var(--border))"
+                  placeholder="_wiki"
+                />
+                <p class="text-xs mt-1" style="color: hsl(var(--muted-foreground))">Folder path in Drive, e.g. <code>_wiki</code> or <code>team/projects/wiki</code></p>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <button
+                v-if="wikiList.length > 0"
+                @click="showNewWikiDialog = false; showWikiSelector = true"
+                :disabled="creatingWiki"
+                class="flex-1 py-2 text-sm rounded-lg border hover:opacity-80 disabled:opacity-50 transition-colors"
+                style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))"
+              >Back</button>
+              <button
+                @click="createWikiAndConnect()"
+                :disabled="creatingWiki || !newWikiName.trim() || !newWikiFolder.trim()"
+                class="flex-1 py-2 text-sm rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-colors text-white"
+                style="background-color: hsl(var(--primary))"
+              >
+                <div v-if="creatingWiki" class="spinner" style="width:1rem;height:1rem;border-width:1px;border-top-color:white"></div>
+                {{ creatingWiki ? 'Creating…' : 'Create Wiki' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
     <template v-else>
       <app-header
         :current-path="currentPath"
@@ -12,6 +101,11 @@ const app = Vue.createApp({
         :notifications="notifications"
         :show-notifications="showNotifications"
         :presence-users="presenceUsers"
+        :wiki-list="wikiList"
+        :current-wiki="currentWikiName"
+        @switch-wiki="switchWiki"
+        @create-wiki="openCreateWikiDialog"
+        @delete-wiki="deleteWiki"
         @edit="startEdit"
         @save="save"
         @cancel="cancelEdit"
@@ -158,6 +252,46 @@ const app = Vue.createApp({
           </div>
         </div>
       </div>
+      <!-- Create Wiki dialog (from header) -->
+      <div v-if="showCreateWikiDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="!creatingWiki && (showCreateWikiDialog = false)">
+        <div class="rounded-xl shadow-xl p-6 w-full max-w-md mx-4" style="background-color: hsl(var(--background)); color: hsl(var(--foreground))">
+          <h3 class="text-lg font-semibold mb-4">New Wiki</h3>
+          <div class="space-y-3 mb-5">
+            <div>
+              <label class="block text-xs font-medium mb-1" style="color: hsl(var(--muted-foreground))">Wiki name</label>
+              <input
+                v-model="newWikiName"
+                @keyup.enter="!creatingWiki && createWikiFromHeader()"
+                :disabled="creatingWiki"
+                class="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+                style="border-color: hsl(var(--border))"
+                placeholder="default"
+                ref="createWikiNameInput"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium mb-1" style="color: hsl(var(--muted-foreground))">Root folder in Google Drive</label>
+              <input
+                v-model="newWikiFolder"
+                @keyup.enter="!creatingWiki && createWikiFromHeader()"
+                :disabled="creatingWiki"
+                class="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+                style="border-color: hsl(var(--border))"
+                placeholder="_wiki"
+              />
+              <p class="text-xs mt-1" style="color: hsl(var(--muted-foreground))">Folder path in Drive, e.g. <code>_wiki</code> or <code>team/projects/wiki</code></p>
+            </div>
+          </div>
+          <div class="flex justify-end gap-2">
+            <button @click="showCreateWikiDialog = false" :disabled="creatingWiki" class="px-4 py-2 text-sm rounded-lg border hover:opacity-80 disabled:opacity-50" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))">Cancel</button>
+            <button @click="createWikiFromHeader()" :disabled="creatingWiki || !newWikiName.trim() || !newWikiFolder.trim()" class="px-4 py-2 text-sm rounded-lg flex items-center gap-2 disabled:opacity-50 text-white" style="background-color: hsl(var(--primary))">
+              <div v-if="creatingWiki" class="spinner" style="border-color:hsl(var(--primary-foreground)/0.3);border-top-color:hsl(var(--primary-foreground));width:1rem;height:1rem;border-width:1px"></div>
+              {{ creatingWiki ? 'Creating…' : 'Create & Switch' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div v-if="anonymousShareDialog.open" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="!anonymousShareDialog.loading && closeAnonymousShareDialog()">
         <div class="rounded-xl shadow-xl p-6 w-full max-w-2xl mx-4" style="background-color: hsl(var(--background)); color: hsl(var(--foreground))">
           <h3 class="text-lg font-semibold mb-2">Anonymous Share</h3>
@@ -195,6 +329,16 @@ const app = Vue.createApp({
         assetSearch: '',
       },
       authenticated: false,
+      wikiReady: false,
+      wikiLoading: false,
+      showWikiSelector: false,
+      showNewWikiDialog: false,
+      showCreateWikiDialog: false,
+      wikiList: [],
+      currentWikiName: '',
+      newWikiName: 'default',
+      newWikiFolder: '_wiki',
+      creatingWiki: false,
       user: null,
       rootId: null,
       currentPath: '',
@@ -254,7 +398,14 @@ const app = Vue.createApp({
     AuthManager.init((loggedIn) => {
       this.authenticated = loggedIn;
       this.user = AuthManager.user;
-      if (loggedIn) this.initApp();
+      if (loggedIn) {
+        this.initApp();
+      } else {
+        this.wikiReady = false;
+        this.wikiList = [];
+        this.showWikiSelector = false;
+        this.showNewWikiDialog = false;
+      }
     });
 
     window.addEventListener('hashchange', () => this.onRouteChange());
@@ -276,16 +427,62 @@ const app = Vue.createApp({
   },
   methods: {
     async initApp() {
+      // Reset wiki state in case a previous session is still showing
+      this.wikiReady = false;
+      this.document = null;
+      this.fileContent = '';
+
+      // Namespace cache per authenticated user so accounts don't share entries
+      CacheService.setUser(this.user.email);
+
+      // Static config: ROOT_FOLDER_NAME hard-coded — skip wiki selection
+      if (CONFIG.ROOT_FOLDER_NAME) {
+        await this._connectToWiki(CONFIG.ROOT_FOLDER_NAME);
+        return;
+      }
+
+      // Dynamic wiki selection: load definitions from Drive
+      this.wikiLoading = true;
+      try {
+        const { wikis } = await StorageService.getWikiDefinitions();
+        this.wikiList = wikis;
+
+        // Use the last-remembered wiki for this account if it still exists
+        const savedName = localStorage.getItem('wiki_last:' + this.user.email);
+        if (savedName) {
+          const found = wikis.find(w => w.wikiName === savedName);
+          if (found) {
+            this.wikiLoading = false;
+            await this._connectToWiki(found.rootFolder);
+            return;
+          }
+        }
+
+        this.wikiLoading = false;
+        if (wikis.length === 0) {
+          this.showNewWikiDialog = true;
+          this.$nextTick(() => this.$refs.newWikiNameInput?.focus());
+        } else {
+          this.showWikiSelector = true;
+        }
+      } catch (e) {
+        this.wikiLoading = false;
+        this.showToast('Failed to load wikis: ' + e.message, 'error');
+      }
+    },
+
+    async _connectToWiki(rootFolder) {
+      StorageService.setRootFolderName(rootFolder);
+      this.wikiReady = true;
       try {
         this.rootId = await StorageService.getRootFolderId();
 
-        // Load and connect real-time notifications only when WORKER_URL is configured
         if (CONFIG.WORKER_URL) {
           await new Promise((resolve) => {
             const s = document.createElement('script');
             s.src = 'js/services/realtime.js';
             s.onload = resolve;
-            s.onerror = resolve; // fail gracefully
+            s.onerror = resolve;
             document.head.appendChild(s);
           });
         }
@@ -296,23 +493,108 @@ const app = Vue.createApp({
             if (this.notifications.length > 50) this.notifications.length = 50;
             const action = msg.action === 'save' ? 'updated' : msg.action === 'create' ? 'created' : 'deleted';
             this.showToast(`${msg.user.name} ${action} ${msg.path}`, 'info');
-            // Auto-refresh if viewing the same page
-            if (msg.path === this.currentPath) {
-              this.refreshPage();
-            }
+            if (msg.path === this.currentPath) this.refreshPage();
           });
           RealtimeService.onPresence((users) => {
-            // Exclude self
             this.presenceUsers = users.filter(u => u.email !== this.user?.email);
           });
-          // Use the Drive folder ID (not the name) as the room key — globally unique,
-          // so two unrelated users with the same ROOT_FOLDER_NAME never share a room.
           RealtimeService.connect(CONFIG.WORKER_URL, this.rootId, this.user);
         }
 
         this.onRouteChange();
       } catch (e) {
         this.showToast('Failed to initialize: ' + e.message, 'error');
+      }
+    },
+
+    async selectWiki(wiki) {
+      this.showWikiSelector = false;
+      this.currentWikiName = wiki.wikiName;
+      localStorage.setItem('wiki_last:' + this.user.email, wiki.wikiName);
+      await this._connectToWiki(wiki.rootFolder);
+    },
+
+    async createWikiAndConnect() {
+      const name = (this.newWikiName || '').trim();
+      const folder = (this.newWikiFolder || '').trim();
+      if (!name || !folder) return;
+      this.creatingWiki = true;
+      try {
+        const newWiki = { wikiName: name, rootFolder: folder };
+        const updated = [...this.wikiList, newWiki];
+        await StorageService.saveWikiDefinitions(updated);
+        this.wikiList = updated;
+        this.currentWikiName = name;
+        localStorage.setItem('wiki_last:' + this.user.email, name);
+        this.showNewWikiDialog = false;
+        await this._connectToWiki(folder);
+      } catch (e) {
+        this.showToast('Failed to create wiki: ' + e.message, 'error');
+      }
+      this.creatingWiki = false;
+    },
+
+    openCreateWikiDialog() {
+      this.newWikiName = '';
+      this.newWikiFolder = '_wiki';
+      this.showCreateWikiDialog = true;
+      this.$nextTick(() => this.$refs.createWikiNameInput?.focus());
+    },
+
+    async createWikiFromHeader() {
+      const name = (this.newWikiName || '').trim();
+      const folder = (this.newWikiFolder || '').trim();
+      if (!name || !folder) return;
+      this.creatingWiki = true;
+      try {
+        const newWiki = { wikiName: name, rootFolder: folder };
+        const updated = [...this.wikiList, newWiki];
+        await StorageService.saveWikiDefinitions(updated);
+        this.wikiList = updated;
+        this.showCreateWikiDialog = false;
+        await this.switchWiki(newWiki);
+      } catch (e) {
+        this.showToast('Failed to create wiki: ' + e.message, 'error');
+      }
+      this.creatingWiki = false;
+    },
+
+    async switchWiki(wiki) {
+      if (wiki.wikiName === this.currentWikiName) return;
+      this.currentWikiName = wiki.wikiName;
+      localStorage.setItem('wiki_last:' + this.user.email, wiki.wikiName);
+      window.location.hash = '#/';
+      await this._connectToWiki(wiki.rootFolder);
+      this.refreshSidebar();
+    },
+
+    async deleteWiki(wiki) {
+      try {
+        await this.showConfirm(
+          `Remove wiki "${wiki.wikiName}"?`,
+          'This removes it from your wiki list. Files in Google Drive are not deleted.',
+          'Remove'
+        );
+      } catch { return; }
+      const updated = this.wikiList.filter(w => w.wikiName !== wiki.wikiName);
+      try {
+        await StorageService.saveWikiDefinitions(updated);
+        this.wikiList = updated;
+        if (localStorage.getItem('wiki_last:' + this.user.email) === wiki.wikiName) {
+          localStorage.removeItem('wiki_last:' + this.user.email);
+        }
+        this.showToast(`Wiki "${wiki.wikiName}" removed`, 'success');
+        if (wiki.wikiName === this.currentWikiName) {
+          if (updated.length > 0) {
+            await this.switchWiki(updated[0]);
+          } else {
+            this.wikiReady = false;
+            this.currentWikiName = '';
+            this.showNewWikiDialog = true;
+          }
+        }
+      } catch (e) {
+        this.showToast('Failed to remove wiki: ' + e.message, 'error');
       }
     },
 
@@ -694,6 +976,7 @@ const app = Vue.createApp({
         if (this.showRenameMove) { if (!this.renamingMoving) this.showRenameMove = false; return; }
         if (this.showNewPage) { if (!this.creatingPage) this.showNewPage = false; return; }
         if (this.showNewDrawing) { this.showNewDrawing = false; return; }
+        if (this.showCreateWikiDialog) { if (!this.creatingWiki) this.showCreateWikiDialog = false; return; }
         if (this.mode === 'edit') { this.cancelEdit(); return; }
       }
       const meta = e.metaKey || e.ctrlKey;

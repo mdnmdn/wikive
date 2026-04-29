@@ -233,19 +233,109 @@ const AppHeader = {
           <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
         </button>
 
-        <div class="flex items-center gap-2 ml-2 pl-2 border-l" style="border-color:hsl(var(--border))">
-          <img v-if="user?.picture" :src="user.picture" class="w-7 h-7 rounded-full" referrerpolicy="no-referrer" />
-          <span class="text-sm">{{ user?.name }}</span>
-          <button @click="logout" class="text-sm hover:opacity-80 transition-colors" title="Sign out">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        <!-- ═══ WIKI SELECTOR (dynamic multi-wiki mode only) ═══ -->
+        <div v-if="wikiList && wikiList.length > 0" class="relative" ref="wikiDropdown">
+          <button
+            @click="showWikiMenu = !showWikiMenu"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors"
+            style="border-color:hsl(var(--border));background-color:hsl(var(--muted))"
+            title="Switch wiki"
+          >
+            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5S19.832 5.477 21 6.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+            <span class="max-w-[96px] truncate">{{ currentWiki || '—' }}</span>
+            <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           </button>
+          <div v-if="showWikiMenu" class="absolute right-0 mt-1 w-56 rounded-lg border shadow-lg z-50 py-1" style="background-color:hsl(var(--background));border-color:hsl(var(--border))">
+            <div class="px-3 py-1.5 text-xs font-medium uppercase tracking-wider" style="color:hsl(var(--muted-foreground))">Wikis</div>
+            <button
+              v-for="wiki in wikiList"
+              :key="wiki.wikiName"
+              class="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center gap-2 group"
+              style="color:hsl(var(--foreground))"
+              @click="wiki.wikiName !== currentWiki && wikiAction('switch', wiki)"
+            >
+              <span class="w-2 h-2 rounded-full flex-shrink-0 mt-0.5" :class="wiki.wikiName === currentWiki ? 'bg-primary' : 'border border-muted-foreground'" :style="wiki.wikiName === currentWiki ? 'background-color:hsl(var(--primary))' : 'border-color:hsl(var(--muted-foreground))'"></span>
+              <span class="flex-1 min-w-0">
+                <span class="block truncate font-medium" :class="wiki.wikiName === currentWiki ? '' : ''">{{ wiki.wikiName }}</span>
+                <span class="block truncate text-xs" style="color:hsl(var(--muted-foreground))">{{ wiki.rootFolder }}</span>
+              </span>
+              <button
+                v-if="wiki.wikiName !== currentWiki"
+                @click.stop="wikiAction('delete', wiki)"
+                class="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:text-red-500 transition-all flex-shrink-0"
+                title="Remove wiki"
+              >
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </button>
+            <div class="border-t my-1" style="border-color:hsl(var(--border))"></div>
+            <button @click="wikiAction('create')" class="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center gap-2" style="color:hsl(var(--primary))">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+              New Wiki
+            </button>
+          </div>
+        </div>
+
+        <!-- ═══ USER MENU ═══ -->
+        <div class="relative ml-2 pl-2 border-l" style="border-color:hsl(var(--border))" ref="userDropdown">
+          <button @click="toggleUserMenu()" class="flex items-center gap-2 hover:opacity-80 transition-opacity" title="Account">
+            <img v-if="user?.picture" :src="user.picture" class="w-7 h-7 rounded-full ring-2 ring-transparent hover:ring-primary transition-all" referrerpolicy="no-referrer" />
+            <span v-else class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold text-white" style="background-color:hsl(var(--primary))">{{ user?.name?.[0]?.toUpperCase() }}</span>
+          </button>
+
+          <div v-if="showUserMenu" class="absolute right-0 mt-2 w-64 rounded-xl border shadow-xl z-50 overflow-hidden" style="background-color:hsl(var(--background));border-color:hsl(var(--border))">
+            <!-- Current user -->
+            <div class="px-4 py-3 flex items-center gap-3" style="border-bottom:1px solid hsl(var(--border))">
+              <img v-if="user?.picture" :src="user.picture" class="w-9 h-9 rounded-full flex-shrink-0" referrerpolicy="no-referrer" />
+              <span v-else class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold text-white flex-shrink-0" style="background-color:hsl(var(--primary))">{{ user?.name?.[0]?.toUpperCase() }}</span>
+              <div class="min-w-0">
+                <div class="text-sm font-medium truncate">{{ user?.name }}</div>
+                <div class="text-xs truncate" style="color:hsl(var(--muted-foreground))">{{ user?.email }}</div>
+              </div>
+            </div>
+            <div class="py-1">
+              <button @click="logout()" class="w-full text-left px-4 py-2 text-sm flex items-center gap-2.5 hover:bg-accent transition-colors" style="color:hsl(var(--foreground))">
+                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                Sign out
+              </button>
+            </div>
+
+            <!-- Other accounts -->
+            <template v-if="knownUsers.length">
+              <div style="border-top:1px solid hsl(var(--border))">
+                <div class="px-4 py-1.5 text-xs font-medium uppercase tracking-wider" style="color:hsl(var(--muted-foreground))">Other accounts</div>
+                <button
+                  v-for="u in knownUsers"
+                  :key="u.email"
+                  @click="switchToUser(u.email)"
+                  class="w-full text-left px-4 py-2 flex items-center gap-3 hover:bg-accent transition-colors"
+                  style="color:hsl(var(--foreground))"
+                >
+                  <img v-if="u.picture" :src="u.picture" class="w-7 h-7 rounded-full flex-shrink-0" referrerpolicy="no-referrer" />
+                  <span v-else class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0" style="background-color:hsl(var(--primary))">{{ u.name?.[0]?.toUpperCase() }}</span>
+                  <div class="min-w-0">
+                    <div class="text-sm truncate">{{ u.name }}</div>
+                    <div class="text-xs truncate" style="color:hsl(var(--muted-foreground))">{{ u.email }}</div>
+                  </div>
+                </button>
+              </div>
+            </template>
+
+            <!-- Add account -->
+            <div style="border-top:1px solid hsl(var(--border))">
+              <button @click="addUser()" class="w-full text-left px-4 py-2 text-sm flex items-center gap-2.5 hover:bg-accent transition-colors" style="color:hsl(var(--primary))">
+                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                Add account
+              </button>
+            </div>
+          </div>
         </div>
 
       </div>
     </header>
   `,
   inject: ['rendererState'],
-  props: ['currentPath', 'mode', 'user', 'document', 'darkMode', 'notifications', 'showNotifications', 'presenceUsers'],
+  props: ['currentPath', 'mode', 'user', 'document', 'darkMode', 'notifications', 'showNotifications', 'presenceUsers', 'wikiList', 'currentWiki'],
   emits: [
     'edit', 'save', 'cancel', 'new-page', 'new-snippet', 'new-drawing', 'delete-page',
     'toggle-dark', 'refresh-page', 'rename-move', 'clone', 'share-anonymous',
@@ -253,9 +343,10 @@ const AppHeader = {
     'drawing-save', 'drawing-toggle-autosave', 'drawing-toggle-fullscreen',
     'snippet-copy',
     'asset-refresh', 'asset-upload', 'asset-create-subfolder',
+    'switch-wiki', 'create-wiki', 'delete-wiki',
   ],
   data() {
-    return { showCreateMenu: false };
+    return { showCreateMenu: false, showWikiMenu: false, showUserMenu: false, knownUsers: [] };
   },
   computed: {
     canEdit() {
@@ -294,6 +385,12 @@ const AppHeader = {
       if (this.$refs.notifDropdown && !this.$refs.notifDropdown.contains(e.target) && this.showNotifications) {
         this.$emit('toggle-notifications');
       }
+      if (this.$refs.wikiDropdown && !this.$refs.wikiDropdown.contains(e.target)) {
+        this.showWikiMenu = false;
+      }
+      if (this.$refs.userDropdown && !this.$refs.userDropdown.contains(e.target)) {
+        this.showUserMenu = false;
+      }
     });
   },
   beforeUnmount() {
@@ -303,6 +400,31 @@ const AppHeader = {
     logout() {
       if (typeof RealtimeService !== 'undefined') RealtimeService.disconnect();
       AuthManager.logout();
+    },
+    wikiAction(action, wiki) {
+      this.showWikiMenu = false;
+      if (action === 'switch') this.$emit('switch-wiki', wiki);
+      else if (action === 'create') this.$emit('create-wiki');
+      else if (action === 'delete') this.$emit('delete-wiki', wiki);
+    },
+    toggleUserMenu() {
+      this.showUserMenu = !this.showUserMenu;
+      if (this.showUserMenu) this.knownUsers = AuthManager.getKnownUsers();
+    },
+    logout() {
+      this.showUserMenu = false;
+      if (typeof RealtimeService !== 'undefined') RealtimeService.disconnect();
+      AuthManager.logout();
+    },
+    switchToUser(email) {
+      this.showUserMenu = false;
+      if (typeof RealtimeService !== 'undefined') RealtimeService.disconnect();
+      AuthManager.switchUser(email);
+    },
+    addUser() {
+      this.showUserMenu = false;
+      if (typeof RealtimeService !== 'undefined') RealtimeService.disconnect();
+      AuthManager.addNewUser();
     },
     createAction(type) {
       this.showCreateMenu = false;

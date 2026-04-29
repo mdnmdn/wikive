@@ -10,4 +10,8 @@ class AuthProvider {
   logout() { throw new Error('Not implemented: logout'); }
   getToken() { throw new Error('Not implemented: getToken'); }
   isLoggedIn() { throw new Error('Not implemented: isLoggedIn'); }
+  loginWithHint(email) {}
+  switchUser(email) { this.logout(); this.login(); }
+  addNewUser() { this.logout(); this.login(); }
+  getKnownUsers() { return []; }
 }

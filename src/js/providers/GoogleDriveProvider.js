@@ -5,6 +5,7 @@ class GoogleDriveProvider extends PersistenceProvider {
     this._authManager = authManager;
     this._config = config;
     this._rootId = null;
+    this._wikiDefsFileId = null;
   }
 
   async _fetch(url, options = {}) {
@@ -470,6 +471,52 @@ class GoogleDriveProvider extends PersistenceProvider {
     const homeFile = children.find(f => !f.isFolder && f.name === 'home.md');
     if (!homeFile) {
       await this.createFile('home.md', folderId, this._welcomeContent());
+    }
+  }
+
+  setRootFolderName(name) {
+    if (this._config.ROOT_FOLDER_NAME === name) return;
+    this._config = { ...this._config, ROOT_FOLDER_NAME: name };
+    this._rootId = null;
+    CacheService.remove('root_id');
+  }
+
+  async getWikiDefinitions() {
+    const q = `name='wiki_definitions.json' and 'root' in parents and trashed=false`;
+    const res = await this._fetch(
+      `${this._config.DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,name)`
+    );
+    const data = await res.json();
+    if (!data.files || data.files.length === 0) {
+      this._wikiDefsFileId = null;
+      return { id: null, wikis: [] };
+    }
+    this._wikiDefsFileId = data.files[0].id;
+    const contentRes = await this._fetch(
+      `${this._config.DRIVE_API}/files/${this._wikiDefsFileId}?alt=media`
+    );
+    const text = await contentRes.text();
+    try {
+      return { id: this._wikiDefsFileId, wikis: JSON.parse(text) };
+    } catch {
+      return { id: this._wikiDefsFileId, wikis: [] };
+    }
+  }
+
+  async saveWikiDefinitions(wikis) {
+    const content = JSON.stringify(wikis, null, 2);
+    if (this._wikiDefsFileId) {
+      await this._fetch(
+        `${this._config.DRIVE_UPLOAD_API}/files/${this._wikiDefsFileId}?uploadType=media`,
+        { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: content }
+      );
+    } else {
+      const data = await this._multipartPost(
+        { name: 'wiki_definitions.json', parents: ['root'] },
+        'application/json',
+        content
+      );
+      this._wikiDefsFileId = data.id;
     }
   }
 
