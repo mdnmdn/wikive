@@ -8,6 +8,7 @@ const AiChatPanel = {
     pageContext: { type: String, default: '' },
     aiProviders: { type: Array, default: () => [] },
     providersSaving: { type: Boolean, default: false },
+    encryptionKey: { type: String, default: null },
   },
 
   emits: ['close', 'page-refresh', 'model-change', 'providers-change'],
@@ -166,6 +167,7 @@ const AiChatPanel = {
         v-if="showSettings"
         :providers="aiProviders"
         :saving="providersSaving"
+        :encryption-key="encryptionKey"
         @save="onProvidersSave"
         @back="showSettings = false"
       ></ai-settings-panel>

@@ -500,17 +500,22 @@ class GoogleDriveProvider extends PersistenceProvider {
       const parsed = JSON.parse(text);
       // Old format: plain array of wiki definitions
       if (Array.isArray(parsed)) {
-        return { id: this._wikiDefsFileId, wikis: parsed, aiProviders: [] };
+        return { id: this._wikiDefsFileId, wikis: parsed, aiProviders: [], encryptionKey: null };
       }
-      // New format: { wikis, aiProviders }
-      return { id: this._wikiDefsFileId, wikis: parsed.wikis || [], aiProviders: parsed.aiProviders || [] };
+      // New format: { wikis, aiProviders, encryptionKey }
+      return {
+        id: this._wikiDefsFileId,
+        wikis: parsed.wikis || [],
+        aiProviders: parsed.aiProviders || [],
+        encryptionKey: parsed.encryptionKey || null,
+      };
     } catch {
-      return { id: this._wikiDefsFileId, wikis: [], aiProviders: [] };
+      return { id: this._wikiDefsFileId, wikis: [], aiProviders: [], encryptionKey: null };
     }
   }
 
-  async saveWikiDefinitions({ wikis, aiProviders = [] }) {
-    const content = JSON.stringify({ wikis, aiProviders }, null, 2);
+  async saveWikiDefinitions({ wikis, aiProviders = [], encryptionKey = null }) {
+    const content = JSON.stringify({ wikis, aiProviders, encryptionKey }, null, 2);
     if (this._wikiDefsFileId) {
       await this._fetch(
         `${this._config.DRIVE_UPLOAD_API}/files/${this._wikiDefsFileId}?uploadType=media`,
