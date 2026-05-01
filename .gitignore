@@ -5,3 +5,7 @@ node_modules/
 tmp/
 .env
 worker/.dev.vars
+
+mprocs.log
+server.log
+.jupyterlite.doit.db
