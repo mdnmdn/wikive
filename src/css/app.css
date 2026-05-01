@@ -57,6 +57,18 @@ html, body, #app {
 /* Pointer cursor for all interactive elements */
 button { cursor: pointer; }
 
+/* Material Symbols icon class */
+.ms {
+  font-family: 'Material Symbols Outlined';
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+  font-size: 1.25rem;
+  line-height: 1;
+  display: inline-block;
+  vertical-align: middle;
+  user-select: none;
+  flex-shrink: 0;
+}
+
 /* Sidebar Nav Buttons */
 .nav-btn {
   padding: 0.5rem;
@@ -193,8 +205,10 @@ button { cursor: pointer; }
 }
 
 .tree-item.active {
-  background: hsl(var(--accent));
-  font-weight: 500;
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 hsl(var(--primary));
 }
 
 .tree-item .icon {

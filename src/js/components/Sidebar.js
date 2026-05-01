@@ -18,10 +18,10 @@ const SidebarTree = {
             ><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
           </template>
           <!-- docType icon -->
-          <svg v-if="itemDocType(item) === 'snippet'" class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 1rem; height: 1rem; flex-shrink: 0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
-          <svg v-else-if="itemDocType(item) === 'drawing'" class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 1rem; height: 1rem; flex-shrink: 0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h16v12H4zM8 20h8"/></svg>
-          <svg v-else-if="itemDocType(item) === 'asset' && !item.isFolder" class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 1rem; height: 1rem; flex-shrink: 0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
-          <svg v-else-if="!item.isFolder" class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 1rem; height: 1rem; flex-shrink: 0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <span v-if="itemDocType(item) === 'snippet'" class="ms icon" style="font-size: 1rem">code</span>
+          <span v-else-if="itemDocType(item) === 'drawing'" class="ms icon" style="font-size: 1rem">gesture</span>
+          <span v-else-if="itemDocType(item) === 'asset' && !item.isFolder" class="ms icon" style="font-size: 1rem">attach_file</span>
+          <span v-else-if="!item.isFolder" class="ms icon" style="font-size: 1rem">description</span>
           <span class="truncate">{{ displayName(item) }}</span>
           <!-- expiry badge for snippets -->
           <span v-if="itemDocType(item) === 'snippet' && item.appProperties?.expiryTs" class="ml-auto text-[9px] uppercase tracking-wider font-semibold" :class="isExpiringSoon(item.appProperties.expiryTs) ? 'text-orange-500' : 'opacity-50'">{{ formatTimeLeft(item.appProperties?.expiryTs) }}</span>
@@ -165,19 +165,19 @@ const Sidebar = {
       <!-- Perspective Filters -->
       <div class="p-2 flex items-center justify-around border-b" style="border-color: hsl(var(--border))">
         <button @click="setPerspective('all')" class="nav-btn" :class="{ active: perspective === 'all' }" title="All">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+          <span class="ms">format_list_bulleted</span>
         </button>
         <button @click="setPerspective('pages')" class="nav-btn" :class="{ active: perspective === 'pages' }" title="Pages">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5S19.832 5.477 21 6.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+          <span class="ms">description</span>
         </button>
         <button @click="setPerspective('snippets')" class="nav-btn" :class="{ active: perspective === 'snippets' }" title="Snippets">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+          <span class="ms">code</span>
         </button>
         <button @click="setPerspective('drawings')" class="nav-btn" :class="{ active: perspective === 'drawings' }" title="Drawings">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h16v12H4zM8 20h8"/></svg>
+          <span class="ms">gesture</span>
         </button>
         <button @click="setPerspective('assets')" class="nav-btn" :class="{ active: perspective === 'assets' }" title="Assets">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+          <span class="ms">folder_open</span>
         </button>
       </div>
 
@@ -220,12 +220,12 @@ const Sidebar = {
             <span>Uploading {{ assetUploadCount }} file(s)...</span>
           </div>
           <div v-else class="flex flex-col items-center gap-2 text-xs opacity-70">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+            <span class="ms" style="font-size: 1.5rem">upload_file</span>
             <span>Drop files here</span>
           </div>
         </div>
         <label class="sidebar-asset-upload-btn mt-2 w-full justify-center">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+          <span class="ms" style="font-size: 1rem">upload</span>
           Upload
           <input type="file" multiple class="hidden" @change="onAssetFileInput" />
         </label>
@@ -233,7 +233,7 @@ const Sidebar = {
 
       <!-- Collapse Toggle -->
       <button @click="$emit('toggle-collapse')" class="collapse-toggle">
-        <svg class="w-4 h-4" :class="{ 'rotate-180': isCollapsed }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
+        <span class="ms" :style="isCollapsed ? 'font-size:1rem;transform:rotate(180deg);display:inline-block' : 'font-size:1rem'">chevron_left</span>
       </button>
     </aside>
   `,
