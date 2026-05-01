@@ -108,7 +108,8 @@ export default {
       return stub.fetch(cleanRequest);
     }
 
-    return json({ error: 'not found' }, 404);
+    // Fallback to static assets
+    return env.ASSETS.fetch(request);
   },
 };
 

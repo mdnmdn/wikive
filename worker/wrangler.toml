@@ -22,3 +22,7 @@ AUTHORIZED_EMAILS = "marco.denittis@synesthesia.it,marco.denittis@peoplefirst.ws
 #   npx wrangler secret put GOOGLE_CLIENT_ID
 # It must match the OAuth client ID in config.js exactly.
 # Tokens issued to a different client ID will be rejected (401).
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
