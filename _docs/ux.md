@@ -43,6 +43,7 @@ After login, the app shell renders three permanent regions:
 | **Markdown** | Rendered HTML with syntax highlighting, mermaid diagrams, link interception | Toast UI Editor (WYSIWYG + Markdown split) |
 | **Snippet** | Read-only Ace editor with copy button, language badge, expiry countdown | Editable Ace with name, language selector, expiry duration controls |
 | **Drawing** | Read-only Excalidraw canvas with PNG download | Full Excalidraw editor with save, fullscreen, name editing |
+| **Notebook** | JupyterLite REPL | JupyterLite Lab |
 | **Asset** | Grid of cards with thumbnails, preview modal, upload, rename, delete, subfolder navigation | N/A (managed inline) |
 | **Folder** | If `home.md`/`index.md` exists: renders it as markdown. Otherwise: card grid of contents with "Create Page" button | N/A |
 | **Not found** | Centered 404 with the missing path and a "Create this page" button | N/A |
@@ -50,8 +51,8 @@ After login, the app shell renders three permanent regions:
 ## Navigation and routing
 
 - **Hash-based**: All routes use `window.location.hash` (`#/path/to/doc`). No server required.
-- **Route resolution**: `onRouteChange()` detects special folders (`_assets`, `_snippets`, `_drawings`) and dispatches to `resolveSpecialRoute()` or `resolveWikiRoute()`. Wiki paths try `segment.md` first, then exact name, then show 404.
-- **Breadcrumb**: Renders each path segment as a clickable link. For snippet/drawing IDs in the URL, it resolves the human-readable name from the document prop.
+- **Route resolution**: `onRouteChange()` detects special folders (`_assets`, `_snippets`, `_drawings`, `_notebooks`) and dispatches to `resolveSpecialRoute()` or `resolveWikiRoute()`. Wiki paths try `segment.md` first, then exact name, then show 404.
+- **Breadcrumb**: Renders each path segment as a clickable link. For snippet/drawing/notebook IDs in the URL, it resolves the human-readable name from the document prop.
 - **Internal links**: Markdown links that don't start with `http` or `#` are intercepted and resolved relative to the current document's path, then navigated via hash change.
 
 ## Sidebar UX
@@ -63,9 +64,10 @@ Five icon buttons at the top of the sidebar act as content filters:
 | Button | Filter | Behaviour |
 |--------|--------|-----------|
 | All (list icon) | Shows everything | Default view |
-| Pages (book icon) | Markdown files + non-special folders | Hides `_snippets`, `_drawings`, `_assets` |
+| Pages (book icon) | Markdown files + non-special folders | Hides `_snippets`, `_drawings`, `_notebooks`, `_assets` |
 | Snippets (code icon) | Snippet files + `_snippets` folder | Auto-expands `_snippets`; navigates to `#/_snippets` |
 | Drawings (canvas icon) | Drawing files + `_drawings` folder | Auto-expands `_drawings`; navigates to `#/_drawings` |
+| Notebooks (terminal icon) | Notebook files + `_notebooks` folder | Auto-expands `_notebooks`; navigates to `#/_notebooks` |
 | Assets (upload icon) | Asset files + `_assets` folder | Auto-expands `_assets`; navigates to `#/_assets` |
 
 Clicking a perspective filter also navigates to the matching special route if not already there.
@@ -74,7 +76,7 @@ Clicking a perspective filter also navigates to the matching special route if no
 
 - **Unified recursive tree**: `SidebarTree` loads folder contents from Drive, deduplicates entries where a folder and `.md` file share the same base name (folder wins), and renders items with docType-aware icons.
 - **Folders are documents**: Clicking a folder navigates to it (renders its `home.md` or card grid). The chevron icon separately toggles expand/collapse of children.
-- **Auto-expand**: When a page is created, `expandPath` propagates through the tree to auto-expand parent folders to reveal the new item.
+- **Auto-expand**: When a page is created, `expandPath` propagates through the tree to auto-expand parent folders to reveal the new item. Navigation to notebooks or drawings via IDs also triggers auto-expansion.
 - **Search**: Real-time case-insensitive name filtering. Applied at each tree level.
 - **Snippet expiry badges**: Snippets in the tree show a time-left badge (e.g. "2h", "15m", "Exp"). Items expiring within 1 hour are highlighted in orange.
 
@@ -139,8 +141,8 @@ Dark mode preference persists in `localStorage`.
 
 ## Interaction patterns
 
-- **View/Edit toggle**: Documents start in view mode. Edit button switches to edit mode; Save persists and returns to view; Cancel discards and returns to view. Snippets and drawings handle their own save lifecycle and notify the parent via events.
-- **Create flow**: "+" dropdown → select type → type-specific creation (dialog for pages, immediate navigation for snippets, immediate canvas for drawings). New pages auto-navigate and auto-enter edit mode via `pendingEditPath`.
+- **View/Edit toggle**: Documents start in view mode. Edit button switches to edit mode; Save persists and returns to view; Cancel discards and returns to view. Snippets, drawings, and notebooks handle their own save lifecycle and notify the parent via events.
+- **Create flow**: "+" dropdown → select type → type-specific creation (dialog for pages/notebooks, immediate navigation for snippets, immediate canvas for drawings). New pages auto-navigate and auto-enter edit mode via `pendingEditPath`.
 - **Delete flow**: Confirm dialog → trash in Drive → navigate to parent path → refresh sidebar.
 - **Clipboard paste**: In the asset viewer, pasting an image from the clipboard uploads it directly as a timestamped file.
 - **Wiki path copy**: Assets show a monospace wiki path below each item. Clicking it copies the path to clipboard for use in markdown pages.

@@ -191,6 +191,10 @@ const AppHeader = {
               <span class="ms" style="font-size:1rem">gesture</span>
               New Drawing
             </button>
+            <button @click="createAction('notebook')" class="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center gap-2" style="color:hsl(var(--foreground))">
+              <span class="ms" style="font-size:1rem">terminal</span>
+              New Notebook
+            </button>
           </div>
         </div>
 
@@ -340,7 +344,7 @@ const AppHeader = {
   inject: ['rendererState'],
   props: ['currentPath', 'mode', 'user', 'document', 'darkMode', 'notifications', 'showNotifications', 'presenceUsers', 'wikiList', 'currentWiki', 'aiEnabled'],
   emits: [
-    'edit', 'save', 'cancel', 'new-page', 'new-snippet', 'new-drawing', 'delete-page',
+    'edit', 'save', 'cancel', 'new-page', 'new-snippet', 'new-drawing', 'new-notebook', 'delete-page',
     'toggle-dark', 'refresh-page', 'rename-move', 'clone', 'share-anonymous',
     'toggle-notifications', 'clear-notifications', 'navigate',
     'drawing-save', 'drawing-toggle-autosave', 'drawing-toggle-fullscreen',
@@ -357,23 +361,23 @@ const AppHeader = {
       return this.document ? RendererService.canEdit(this.document.docType) : false;
     },
     canAnonymousShare() {
-      return this.document?.id && this.document.type === 'file' && ['markdown', 'snippet', 'drawing'].includes(this.document.docType);
+      return this.document?.id && this.document.type === 'file' && ['markdown', 'snippet', 'drawing', 'notebook'].includes(this.document.docType);
     },
     showRename() {
       if (!this.document?.id || this.document.type !== 'file') return false;
       const dt = this.document.docType;
-      if (dt === 'drawing') return true;
+      if (dt === 'drawing' || dt === 'notebook') return true;
       if (dt === 'snippet') return this.mode === 'view';
       if (dt === 'markdown') return this.mode === 'view';
       return false;
     },
     showClone() {
-      return this.document?.id && ['markdown', 'snippet', 'drawing'].includes(this.document.docType);
+      return this.document?.id && ['markdown', 'snippet', 'drawing', 'notebook'].includes(this.document.docType);
     },
     showDelete() {
       if (!this.document?.id || this.document.type !== 'file') return false;
       const dt = this.document.docType;
-      if (dt === 'drawing') return true;
+      if (dt === 'drawing' || dt === 'notebook') return true;
       return this.mode === 'view' && this.canEdit;
     },
     samePageUsers() {
@@ -435,6 +439,7 @@ const AppHeader = {
       if (type === 'page') this.$emit('new-page');
       else if (type === 'snippet') this.$emit('new-snippet');
       else if (type === 'drawing') this.$emit('new-drawing');
+      else if (type === 'notebook') this.$emit('new-notebook');
     },
     timeAgo(ts) {
       const diff = Date.now() - ts;

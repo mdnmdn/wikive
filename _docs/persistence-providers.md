@@ -79,6 +79,7 @@ All storage providers must extend `PersistenceProvider` and implement these meth
 | `getAssetsFolderId` | `()` | `string` | Shorthand for `getSpecialFolderId('_assets')` |
 | `getDrawingsFolderId` | `()` | `string` | Shorthand for `getSpecialFolderId('_drawings')` |
 | `getSnippetsFolderId` | `()` | `string` | Shorthand for `getSpecialFolderId('_snippets')` |
+| `getNotebooksFolderId` | `()` | `string` | Shorthand for `getSpecialFolderId('_notebooks')` |
 | `listSnippets` | `(folderId)` | `Array` | List snippets with metadata |
 | `createSnippet` | `(name, content, type, expiryTs, duration)` | `object` | Create snippet with metadata |
 | `updateSnippet` | `(fileId, name, content, type, expiryTs, duration)` | `void` | Update snippet content + metadata |
