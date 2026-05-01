@@ -22,7 +22,7 @@ window.createAiChat = async function({ system, tools = [], model, provider = nul
 
   const config = typeof CONFIG !== 'undefined' ? CONFIG : window.CONFIG;
   const aiUrl = config?.AI_URL;
-  if (!aiUrl) {
+  if (aiUrl === undefined) {
     throw new Error('AI_URL not configured in config.js');
   }
 
@@ -98,7 +98,7 @@ window.createAiChat = async function({ system, tools = [], model, provider = nul
 
 window.isAiConfigured = function() {
   const config = typeof CONFIG !== 'undefined' ? CONFIG : window.CONFIG;
-  return !!(config?.AI_URL);
+  return (config?.AI_URL !== undefined);
 };
 
 window.getDefaultModel = function() {
@@ -114,7 +114,7 @@ window.fetchAiModels = async function() {
   const config = typeof CONFIG !== 'undefined' ? CONFIG : window.CONFIG;
   const aiUrl = config?.AI_URL;
 
-  if (!aiUrl) {
+  if (aiUrl === undefined) {
     return window.AI_MODELS;
   }
 

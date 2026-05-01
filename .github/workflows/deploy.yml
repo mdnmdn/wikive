@@ -32,11 +32,10 @@ jobs:
           mkdir __deploy
 
           # Copy worker files
-          cp -r worker/* __deploy/
-
-          # Copy frontend files to __deploy/public (as configured in wrangler.toml)
-          mkdir -p __deploy/public
-          cp -r src/* __deploy/public/
+          cp -r src __deploy/src
+          cp -r public __deploy/public
+          cp package*.json __deploy/
+          cp wrangler.toml __deploy/
 
           # Create version.json
           VERSION_TAG=${GITHUB_REF#refs/tags/}

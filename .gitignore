@@ -1,13 +1,17 @@
 src/config.js
 
+
 node_modules/
 
 tmp/
 .env
-worker/.dev.vars
+.dev.vars
 
 mprocs.log
 server.log
 .jupyterlite.doit.db
 
 __deploy/
+
+.wrangler/
+.dev.vars

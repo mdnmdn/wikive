@@ -1,8 +1,8 @@
 serve:
-    python3 -m http.server -d src 9595
+    python3 -m http.server -d public 9595
 
 pnpm-serve:
-    pnpm dlx serve src -p 9595
+    pnpm dlx serve public -p 9595
 
 # Build the Excalidraw web component bundle
 excalidraw-build:
@@ -17,7 +17,7 @@ excalidraw-sync: excalidraw-build
 
 
 worker-dev:
-    cd worker && pnpm run dev
+    pnpm run dev
 
 run-all-dev:
     #!/usr/bin/env bash
@@ -42,11 +42,10 @@ deploy env="default":
     mkdir __deploy
 
     # Copy worker files
-    cp -r worker/* __deploy/
-
-    # Copy frontend files to __deploy/public
-    mkdir -p __deploy/public
-    cp -r src/* __deploy/public/
+    cp -r src __deploy/src
+    cp -r public __deploy/public
+    cp package*.json pnpm-lock.yaml __deploy/
+    cp wrangler.toml __deploy/
 
     # Create version.json
     VERSION="manual-$(date +%Y%m%d-%H%M)"

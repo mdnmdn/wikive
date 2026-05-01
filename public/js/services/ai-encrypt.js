@@ -12,7 +12,7 @@ window.generateEncryptionKey = function() {
 window.encryptProviderKeys = async function(clientKey, plainTexts) {
   const config = typeof CONFIG !== 'undefined' ? CONFIG : window.CONFIG;
   const aiUrl = config?.AI_URL;
-  if (!aiUrl) throw new Error('AI_URL not configured');
+  if (aiUrl === undefined) throw new Error('AI_URL not configured');
 
   let token = null;
   if (typeof AuthService !== 'undefined' && AuthService.getToken) {
