@@ -55,13 +55,13 @@ deploy env="default":
     echo "{\"version\": \"$VERSION\", \"buildDate\": \"$BUILD_DATE\", \"branch\": \"$BRANCH\", \"actionId\": \"manual\"}" > __deploy/public/version.json
 
     # Inject environment config
-    if [ -f "_devops/{{env}}/config.js" ]; then
-        cp "_devops/{{env}}/config.js" __deploy/public/config.js
+    if [ -f "_devops/envs/{{env}}/config.js" ]; then
+        cp "_devops/envs/{{env}}/config.js" __deploy/public/config.js
     else
-        echo "Warning: _devops/{{env}}/config.js not found"
+        echo "Warning: _devops/envs/{{env}}/config.js not found"
     fi
 
     # Install and deploy
     cd __deploy
-    npm install
-    npx wrangler deploy
+    pnpm install
+    pnpx wrangler deploy

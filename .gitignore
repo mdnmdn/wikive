@@ -1,4 +1,4 @@
-config.js
+src/config.js
 
 node_modules/
 
@@ -9,3 +9,5 @@ worker/.dev.vars
 mprocs.log
 server.log
 .jupyterlite.doit.db
+
+__deploy/

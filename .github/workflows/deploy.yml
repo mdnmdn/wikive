@@ -50,10 +50,10 @@ jobs:
           echo "{\"version\": \"$VERSION_TAG\", \"buildDate\": \"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\", \"branch\": \"$BUILD_BRANCH\", \"actionId\": \"${GITHUB_RUN_ID}\"}" > __deploy/public/version.json
 
           # Inject environment config
-          if [ -f "_devops/$ENV/config.js" ]; then
-            cp "_devops/$ENV/config.js" __deploy/public/config.js
+          if [ -f "_devops/envs/$ENV/config.js" ]; then
+            cp "_devops/envs/$ENV/config.js" __deploy/public/config.js
           else
-            echo "Warning: _devops/$ENV/config.js not found, using default if available"
+            echo "Warning: _devops/envs/$ENV/config.js not found, using default if available"
           fi
 
       - name: Install Worker Dependencies

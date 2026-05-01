@@ -26,3 +26,7 @@ AUTHORIZED_EMAILS = "marco.denittis@synesthesia.it,marco.denittis@peoplefirst.ws
 [assets]
 directory = "./public"
 binding = "ASSETS"
+
+[[routes]]
+pattern = "wikive.livingdocs.co"
+custom_domain = true
