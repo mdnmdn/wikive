@@ -34,9 +34,10 @@ class PersistenceProvider {
   setRootFolderName(name) {}
 
   // Read the list of wikis stored in the provider-level definitions file.
-  // Returns { id: string|null, wikis: Array<{wikiName, rootFolder}> }
-  async getWikiDefinitions() { return { id: null, wikis: [] }; }
+  // Returns { id: string|null, wikis: Array<{wikiName, rootFolder}>, aiProviders: Array }
+  async getWikiDefinitions() { return { id: null, wikis: [], aiProviders: [] }; }
 
-  // Persist the updated wikis list to the provider-level definitions file.
-  async saveWikiDefinitions(wikis) {}
+  // Persist the updated definitions to the provider-level definitions file.
+  // Accepts { wikis: Array<{wikiName, rootFolder}>, aiProviders: Array }
+  async saveWikiDefinitions({ wikis, aiProviders = [] }) {}
 }

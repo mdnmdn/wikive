@@ -6,9 +6,11 @@ const AiChatPanel = {
     chat: { type: Object, required: true },
     model: { type: String, default: 'gemini:gemini-2.0-flash' },
     pageContext: { type: String, default: '' },
+    aiProviders: { type: Array, default: () => [] },
+    providersSaving: { type: Boolean, default: false },
   },
 
-  emits: ['close', 'page-refresh', 'model-change'],
+  emits: ['close', 'page-refresh', 'model-change', 'providers-change'],
 
   data() {
     return {
@@ -20,6 +22,7 @@ const AiChatPanel = {
       availableModels: [],
       tools: [],
       _unsubs: [],
+      showSettings: false,
     };
   },
 
@@ -42,6 +45,19 @@ const AiChatPanel = {
   },
 
   computed: {
+    // When providers are configured use their models; otherwise fall back to AI_MODELS from backend
+    effectiveModels() {
+      if (this.aiProviders && this.aiProviders.length > 0) {
+        return this.aiProviders.flatMap(p =>
+          (p.models || []).map(m => ({
+            label: `${p.name} › ${m}`,
+            value: `${p.id}::${m}`,
+          }))
+        );
+      }
+      return this.availableModels;
+    },
+
     visibleMessages() {
       return this.messages.filter(m => m.role === 'user' || m.role === 'assistant');
     },
@@ -74,7 +90,7 @@ const AiChatPanel = {
     },
 
     modelLabel() {
-      return (this.availableModels.find(m => m.value === this.model) ?? {}).label ?? this.model;
+      return (this.effectiveModels.find(m => m.value === this.model) ?? {}).label ?? this.model;
     },
   },
 
@@ -104,8 +120,11 @@ const AiChatPanel = {
 
     onModelChange(e) {
       const newModel = e.target.value;
-      this.chat.updateModel(newModel);
       this.$emit('model-change', newModel);
+    },
+
+    onProvidersSave(providers) {
+      this.$emit('providers-change', providers);
     },
 
     renderContent(content) {
@@ -117,83 +136,106 @@ const AiChatPanel = {
     },
   },
 
+  components: { 'ai-settings-panel': AiSettingsPanel },
+
   template: `
     <div class="ai-panel">
       <div class="ai-panel-header">
         <span class="ai-panel-title">AI Assistant</span>
         <select
+          v-if="!showSettings"
           class="ai-panel-model-select"
           :value="model"
           @change="onModelChange"
         >
-          <option v-for="m in availableModels" :key="m.value" :value="m.value">{{ m.label }}</option>
+          <option v-for="m in effectiveModels" :key="m.value" :value="m.value">{{ m.label }}</option>
         </select>
-        <button class="nav-btn" @click="clear" title="Clear history">↺</button>
-        <button class="nav-btn" @click="$emit('close')" title="Close">✕</button>
+        <button class="nav-btn" @click="showSettings = !showSettings" :title="showSettings ? 'Back to chat' : 'AI settings'">
+          <span class="ms" style="font-size:1rem">{{ showSettings ? 'chat' : 'settings' }}</span>
+        </button>
+        <button v-if="!showSettings" class="nav-btn" @click="clear" title="Clear history">
+          <span class="ms" style="font-size:1rem">delete_sweep</span>
+        </button>
+        <button class="nav-btn" @click="$emit('close')" title="Close">
+          <span class="ms" style="font-size:1rem">close</span>
+        </button>
       </div>
 
-      <div class="ai-panel-messages" ref="messageList">
-        <div v-if="visibleMessages.length === 0" class="ai-panel-empty">
-          Ask me anything about your wiki.
-        </div>
+      <!-- Settings panel replaces message area -->
+      <ai-settings-panel
+        v-if="showSettings"
+        :providers="aiProviders"
+        :saving="providersSaving"
+        @save="onProvidersSave"
+        @back="showSettings = false"
+      ></ai-settings-panel>
 
-        <template v-for="(msg, i) in visibleMessages" :key="i">
-          <div :class="['ai-message', 'ai-message--' + msg.role]">
-            <div class="ai-message-role">{{ msg.role === 'user' ? 'You' : 'AI' }}</div>
+      <template v-else>
+        <div class="ai-panel-messages" ref="messageList">
+          <div v-if="visibleMessages.length === 0" class="ai-panel-empty">
+            Ask me anything about your wiki.
+          </div>
 
-            <div
-              v-if="msg.content"
-              class="ai-message-content prose"
-              v-html="renderContent(msg.content)"
-            ></div>
+          <template v-for="(msg, i) in visibleMessages" :key="i">
+            <div :class="['ai-message', 'ai-message--' + msg.role]">
+              <div class="ai-message-role">{{ msg.role === 'user' ? 'You' : 'AI' }}</div>
 
-            <div
-              v-if="msg.role === 'assistant' && i === visibleMessages.length - 1 && toolCallStatuses.length"
-              class="ai-tool-calls"
-            >
               <div
-                v-for="tc in toolCallStatuses"
-                :key="tc.id"
-                :class="['ai-tool-badge', 'ai-tool-badge--' + tc.status]"
+                v-if="msg.content"
+                class="ai-message-content prose"
+                v-html="renderContent(msg.content)"
+              ></div>
+
+              <div
+                v-if="msg.role === 'assistant' && i === visibleMessages.length - 1 && toolCallStatuses.length"
+                class="ai-tool-calls"
               >
-                <span class="ai-tool-icon">
-                  {{ tc.status === 'running' ? '⏳' : tc.status === 'error' ? '✗' : '✓' }}
-                </span>
-                <span class="ai-tool-label">{{ formatToolLabel(tc) }}</span>
-                <span v-if="tc.status === 'error'" class="ai-tool-error">
-                  {{ tc.result?.reason?.message ?? 'failed' }}
-                </span>
+                <div
+                  v-for="tc in toolCallStatuses"
+                  :key="tc.id"
+                  :class="['ai-tool-badge', 'ai-tool-badge--' + tc.status]"
+                >
+                  <span class="ai-tool-icon">
+                    {{ tc.status === 'running' ? '⏳' : tc.status === 'error' ? '✗' : '✓' }}
+                  </span>
+                  <span class="ai-tool-label">{{ formatToolLabel(tc) }}</span>
+                  <span v-if="tc.status === 'error'" class="ai-tool-error">
+                    {{ tc.result?.reason?.message ?? 'failed' }}
+                  </span>
+                </div>
               </div>
             </div>
+          </template>
+
+          <div v-if="showTypingIndicator" class="ai-typing">
+            <span></span><span></span><span></span>
           </div>
-        </template>
-
-        <div v-if="showTypingIndicator" class="ai-typing">
-          <span></span><span></span><span></span>
         </div>
-      </div>
 
-      <div v-if="error" class="ai-panel-error">
-        ⚠ {{ error.message }}
-        <button class="nav-btn" @click="chat.chat.resendMessages()">Retry</button>
-      </div>
+        <div v-if="error" class="ai-panel-error">
+          ⚠ {{ error.message }}
+          <button class="nav-btn" @click="chat.chat.resendMessages()">Retry</button>
+        </div>
 
-      <div class="ai-panel-input-row">
-        <textarea
-          v-model="input"
-          class="ai-panel-input"
-          placeholder="Ask the AI…"
-          rows="2"
-          :disabled="isGenerating"
-          @keydown.enter.exact.prevent="send"
-          @keydown.enter.shift.exact.prevent="input += '\\n'"
-        ></textarea>
-        <button
-          class="ai-panel-send"
-          :disabled="!input.trim() || isGenerating"
-          @click="send"
-        >↑</button>
-      </div>
+        <div class="ai-panel-input-row">
+          <textarea
+            v-model="input"
+            class="ai-panel-input"
+            placeholder="Ask the AI…"
+            rows="2"
+            :disabled="isGenerating"
+            @keydown.enter.exact.prevent="send"
+            @keydown.enter.shift.exact.prevent="input += '\\n'"
+          ></textarea>
+          <button
+            class="ai-panel-send"
+            :disabled="!input.trim() || isGenerating"
+            @click="send"
+          >
+            <span class="ms" style="font-size:1.125rem">arrow_upward</span>
+          </button>
+        </div>
+      </template>
     </div>
   `,
 };

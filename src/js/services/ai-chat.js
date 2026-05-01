@@ -11,7 +11,8 @@ async function getHashbrown() {
   return hashbrown;
 }
 
-window.createAiChat = async function({ system, tools = [], model }) {
+// provider: optional { type, apiKey, url } — forwarded as X-Provider-* headers to the backend
+window.createAiChat = async function({ system, tools = [], model, provider = null }) {
   const { fryHashbrown, createHttpTransport } = await getHashbrown();
 
   if (chatInstance) {
@@ -24,36 +25,50 @@ window.createAiChat = async function({ system, tools = [], model }) {
     throw new Error('AI_URL not configured in config.js');
   }
 
-  const transport = createHttpTransport({
-    baseUrl: `${aiUrl}/api/chat`,
-    middleware: [
-      async (requestInit) => {
-        // Try to get token from AuthService
-        let token = AuthService.getToken();
+  const middleware = [
+    async (requestInit) => {
+      // Try to get token from AuthService
+      let token = AuthService.getToken();
 
-        // If no token, check sessionStorage directly
-        if (!token) {
-          const saved = sessionStorage.getItem('wiki_auth');
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            if (parsed.expiry > Date.now()) {
-              token = parsed.token;
-            }
+      // If no token, check sessionStorage directly
+      if (!token) {
+        const saved = sessionStorage.getItem('wiki_auth');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.expiry > Date.now()) {
+            token = parsed.token;
           }
         }
+      }
 
-        if (!token) {
-          throw new Error('Google authentication not available');
-        }
-        return {
-          ...requestInit,
-          headers: {
-            ...requestInit.headers,
-            'Authorization': `Bearer ${token}`,
-          },
-        };
+      if (!token) {
+        throw new Error('Google authentication not available');
+      }
+      return {
+        ...requestInit,
+        headers: {
+          ...requestInit.headers,
+          'Authorization': `Bearer ${token}`,
+        },
+      };
+    },
+  ];
+
+  if (provider) {
+    middleware.push(async (requestInit) => ({
+      ...requestInit,
+      headers: {
+        ...requestInit.headers,
+        'X-Provider-Type': provider.type || '',
+        'X-Provider-Key': provider.apiKey || '',
+        ...(provider.url ? { 'X-Provider-URL': provider.url } : {}),
       },
-    ],
+    }));
+  }
+
+  const transport = createHttpTransport({
+    baseUrl: `${aiUrl}/api/chat`,
+    middleware,
   });
 
   const chat = fryHashbrown({
