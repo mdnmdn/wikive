@@ -1218,14 +1218,20 @@ const app = Vue.createApp({
     },
 
     async _initEncryptionKey(encryptionKeyFromDrive) {
-      const localKey = localStorage.getItem('wiki:enc-key');
-      if (localKey) {
-        this.encryptionKey = localKey;
-        return;
-      }
       if (encryptionKeyFromDrive) {
         this.encryptionKey = encryptionKeyFromDrive;
         localStorage.setItem('wiki:enc-key', encryptionKeyFromDrive);
+        return;
+      }
+      const localKey = localStorage.getItem('wiki:enc-key');
+      if (localKey) {
+        this.encryptionKey = localKey;
+        // Also save to Drive for other devices
+        StorageService.saveWikiDefinitions({
+          wikis: this.wikiList,
+          aiProviders: this.aiProviders,
+          encryptionKey: this.encryptionKey,
+        }).catch(() => {});
         return;
       }
       if (typeof window.generateEncryptionKey === 'function') {
