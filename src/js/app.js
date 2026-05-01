@@ -161,6 +161,7 @@ const app = Vue.createApp({
         :page-context="currentPath"
         :ai-providers="aiProviders"
         :providers-saving="providersSaving"
+        :encryption-key="encryptionKey"
         @close="closeAiPanel"
         @model-change="onAiModelChange"
         @providers-change="onProvidersChange"
@@ -375,6 +376,7 @@ const app = Vue.createApp({
       aiModel: 'gemini:gemini-2.0-flash',
       aiProviders: [],
       providersSaving: false,
+      encryptionKey: null,
     };
   },
   computed: {
@@ -460,9 +462,10 @@ const app = Vue.createApp({
       // Dynamic wiki selection: load definitions from Drive
       this.wikiLoading = true;
       try {
-        const { wikis, aiProviders } = await StorageService.getWikiDefinitions();
+        const { wikis, aiProviders, encryptionKey } = await StorageService.getWikiDefinitions();
         this.wikiList = wikis;
         this.aiProviders = aiProviders || [];
+        await this._initEncryptionKey(encryptionKey);
 
         // Use the last-remembered wiki for this account if it still exists
         const savedName = localStorage.getItem('wiki_last:' + this.user.email);
@@ -539,7 +542,7 @@ const app = Vue.createApp({
       try {
         const newWiki = { wikiName: name, rootFolder: folder };
         const updated = [...this.wikiList, newWiki];
-        await StorageService.saveWikiDefinitions({ wikis: updated, aiProviders: this.aiProviders });
+        await StorageService.saveWikiDefinitions({ wikis: updated, aiProviders: this.aiProviders, encryptionKey: this.encryptionKey });
         this.wikiList = updated;
         this.currentWikiName = name;
         localStorage.setItem('wiki_last:' + this.user.email, name);
@@ -566,7 +569,7 @@ const app = Vue.createApp({
       try {
         const newWiki = { wikiName: name, rootFolder: folder };
         const updated = [...this.wikiList, newWiki];
-        await StorageService.saveWikiDefinitions({ wikis: updated, aiProviders: this.aiProviders });
+        await StorageService.saveWikiDefinitions({ wikis: updated, aiProviders: this.aiProviders, encryptionKey: this.encryptionKey });
         this.wikiList = updated;
         this.showCreateWikiDialog = false;
         await this.switchWiki(newWiki);
@@ -595,7 +598,7 @@ const app = Vue.createApp({
       } catch { return; }
       const updated = this.wikiList.filter(w => w.wikiName !== wiki.wikiName);
       try {
-        await StorageService.saveWikiDefinitions({ wikis: updated, aiProviders: this.aiProviders });
+        await StorageService.saveWikiDefinitions({ wikis: updated, aiProviders: this.aiProviders, encryptionKey: this.encryptionKey });
         this.wikiList = updated;
         if (localStorage.getItem('wiki_last:' + this.user.email) === wiki.wikiName) {
           localStorage.removeItem('wiki_last:' + this.user.email);
@@ -1179,6 +1182,7 @@ const app = Vue.createApp({
             provider,
             system: window.WIKI_ASSISTANT_SYSTEM || 'You are a helpful AI assistant.',
             tools,
+            encryptionKey: this.encryptionKey,
           });
           this.aiChat.chat.messages.subscribe(msgs => { this.aiMessages = msgs; });
           this.aiChat.chat.isGenerating.subscribe(v => { this.aiGenerating = v; });
@@ -1213,6 +1217,28 @@ const app = Vue.createApp({
       }
     },
 
+    async _initEncryptionKey(encryptionKeyFromDrive) {
+      const localKey = localStorage.getItem('wiki:enc-key');
+      if (localKey) {
+        this.encryptionKey = localKey;
+        return;
+      }
+      if (encryptionKeyFromDrive) {
+        this.encryptionKey = encryptionKeyFromDrive;
+        localStorage.setItem('wiki:enc-key', encryptionKeyFromDrive);
+        return;
+      }
+      if (typeof window.generateEncryptionKey === 'function') {
+        this.encryptionKey = window.generateEncryptionKey();
+        localStorage.setItem('wiki:enc-key', this.encryptionKey);
+        StorageService.saveWikiDefinitions({
+          wikis: this.wikiList,
+          aiProviders: this.aiProviders,
+          encryptionKey: this.encryptionKey,
+        }).catch(() => {});
+      }
+    },
+
     async onProvidersChange(providers) {
       this.aiProviders = providers;
       // Rebuild model list from updated providers
@@ -1223,7 +1249,7 @@ const app = Vue.createApp({
       }
       this.providersSaving = true;
       try {
-        await StorageService.saveWikiDefinitions({ wikis: this.wikiList, aiProviders: providers });
+        await StorageService.saveWikiDefinitions({ wikis: this.wikiList, aiProviders: providers, encryptionKey: this.encryptionKey });
       } catch (e) {
         this.showToast('Failed to save AI settings: ' + e.message, 'error');
       }

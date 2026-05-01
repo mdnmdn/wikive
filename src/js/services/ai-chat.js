@@ -11,8 +11,9 @@ async function getHashbrown() {
   return hashbrown;
 }
 
-// provider: optional { type, apiKey, url } — forwarded as X-Provider-* headers to the backend
-window.createAiChat = async function({ system, tools = [], model, provider = null }) {
+// provider: optional { type, apiKey, apiKeyEncrypted, url } — forwarded as X-Provider-* headers to the backend
+// encryptionKey: the per-user client key used to decrypt the stored API key on the worker
+window.createAiChat = async function({ system, tools = [], model, provider = null, encryptionKey = null }) {
   const { fryHashbrown, createHttpTransport } = await getHashbrown();
 
   if (chatInstance) {
@@ -62,6 +63,10 @@ window.createAiChat = async function({ system, tools = [], model, provider = nul
         'X-Provider-Type': provider.type || '',
         'X-Provider-Key': provider.apiKey || '',
         ...(provider.url ? { 'X-Provider-URL': provider.url } : {}),
+        ...(provider.apiKeyEncrypted && encryptionKey ? {
+          'X-Provider-Encrypted': 'true',
+          'X-Provider-Enc-Key': encryptionKey,
+        } : {}),
       },
     }));
   }
