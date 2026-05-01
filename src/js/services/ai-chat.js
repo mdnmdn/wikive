@@ -103,7 +103,7 @@ window.isAiConfigured = function() {
 
 window.getDefaultModel = function() {
   const config = typeof CONFIG !== 'undefined' ? CONFIG : window.CONFIG;
-  return config?.AI_MODEL || 'gemini:gemini-flash-lite-latest ';
+  return config?.AI_MODEL || 'gemini:gemini-flash-lite-latest';
 };
 
 window.AI_MODELS = [
