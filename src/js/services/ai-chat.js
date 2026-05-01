@@ -11,7 +11,9 @@ async function getHashbrown() {
   return hashbrown;
 }
 
-window.createAiChat = async function({ system, tools = [], model }) {
+// provider: optional { type, apiKey, apiKeyEncrypted, url } — forwarded as X-Provider-* headers to the backend
+// encryptionKey: the per-user client key used to decrypt the stored API key on the worker
+window.createAiChat = async function({ system, tools = [], model, provider = null, encryptionKey = null }) {
   const { fryHashbrown, createHttpTransport } = await getHashbrown();
 
   if (chatInstance) {
@@ -24,36 +26,54 @@ window.createAiChat = async function({ system, tools = [], model }) {
     throw new Error('AI_URL not configured in config.js');
   }
 
-  const transport = createHttpTransport({
-    baseUrl: `${aiUrl}/api/chat`,
-    middleware: [
-      async (requestInit) => {
-        // Try to get token from AuthService
-        let token = AuthService.getToken();
+  const middleware = [
+    async (requestInit) => {
+      // Try to get token from AuthService
+      let token = AuthService.getToken();
 
-        // If no token, check sessionStorage directly
-        if (!token) {
-          const saved = sessionStorage.getItem('wiki_auth');
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            if (parsed.expiry > Date.now()) {
-              token = parsed.token;
-            }
+      // If no token, check sessionStorage directly
+      if (!token) {
+        const saved = sessionStorage.getItem('wiki_auth');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.expiry > Date.now()) {
+            token = parsed.token;
           }
         }
+      }
 
-        if (!token) {
-          throw new Error('Google authentication not available');
-        }
-        return {
-          ...requestInit,
-          headers: {
-            ...requestInit.headers,
-            'Authorization': `Bearer ${token}`,
-          },
-        };
+      if (!token) {
+        throw new Error('Google authentication not available');
+      }
+      return {
+        ...requestInit,
+        headers: {
+          ...requestInit.headers,
+          'Authorization': `Bearer ${token}`,
+        },
+      };
+    },
+  ];
+
+  if (provider) {
+    middleware.push(async (requestInit) => ({
+      ...requestInit,
+      headers: {
+        ...requestInit.headers,
+        'X-Provider-Type': provider.type || '',
+        'X-Provider-Key': provider.apiKey || '',
+        ...(provider.url ? { 'X-Provider-URL': provider.url } : {}),
+        ...(provider.apiKeyEncrypted && encryptionKey ? {
+          'X-Provider-Encrypted': 'true',
+          'X-Provider-Enc-Key': encryptionKey,
+        } : {}),
       },
-    ],
+    }));
+  }
+
+  const transport = createHttpTransport({
+    baseUrl: `${aiUrl}/api/chat`,
+    middleware,
   });
 
   const chat = fryHashbrown({
@@ -83,7 +103,7 @@ window.isAiConfigured = function() {
 
 window.getDefaultModel = function() {
   const config = typeof CONFIG !== 'undefined' ? CONFIG : window.CONFIG;
-  return config?.AI_MODEL || 'gemini:gemini-flash-lite-latest ';
+  return config?.AI_MODEL || 'gemini:gemini-flash-lite-latest';
 };
 
 window.AI_MODELS = [

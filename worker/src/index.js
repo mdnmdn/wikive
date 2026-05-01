@@ -40,6 +40,11 @@ export default {
       return handleChat(request, env);
     }
 
+    // Encrypt API keys endpoint
+    if (url.pathname === '/api/encrypt' && request.method === 'POST') {
+      return handleEncrypt(request, env);
+    }
+
     // Public share proxy for anonymously shared Drive files.
     // Avoids browser-side CORS/XHR restrictions on drive.usercontent.google.com.
     if (url.pathname === '/share-file') {
@@ -137,6 +142,31 @@ async function verifyGoogleToken(token, expectedClientId) {
   }
 }
 
+// Shared auth helper: validates token and resolves email.
+// Returns { claims, email } on success, or calls the reject handler.
+async function authenticateRequest(request, env) {
+  const authHeader = request.headers.get('Authorization') ?? '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return { error: json({ error: 'Authorization header required' }, 401) };
+
+  const claims = await verifyGoogleToken(token, env.GOOGLE_CLIENT_ID);
+  if (!claims) return { error: json({ error: 'Invalid or expired Google token' }, 401) };
+
+  let email = claims.email;
+  if (!email) {
+    const userInfo = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (userInfo.ok) email = (await userInfo.json()).email;
+  }
+
+  if (!isEmailAuthorized(email, env.AUTHORIZED_EMAILS)) {
+    return { error: json({ error: 'Access denied' }, 403) };
+  }
+
+  return { claims, email, token };
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -149,10 +179,46 @@ function corsHeaders(request) {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Provider-Type, X-Provider-Key, X-Provider-URL, X-Provider-Encrypted, X-Provider-Enc-Key',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
   };
+}
+
+// ── Crypto helpers (AES-256-GCM, key derived via HMAC-SHA-256) ───────────────
+
+// Derives a 256-bit AES-GCM key from a worker secret and a per-user client key.
+// Both parts must be present to decrypt — neither alone is sufficient.
+async function deriveKey(secret, clientKey) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const signature = await crypto.subtle.sign('HMAC', keyMaterial, enc.encode(clientKey));
+  return crypto.subtle.importKey('raw', signature, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+}
+
+async function encryptText(key, text) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    new TextEncoder().encode(text)
+  );
+  const combined = new Uint8Array(12 + ciphertext.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(ciphertext), 12);
+  return btoa(String.fromCharCode(...combined));
+}
+
+async function decryptText(key, encoded) {
+  const bytes = Uint8Array.from(atob(encoded), c => c.charCodeAt(0));
+  const plaintext = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: bytes.slice(0, 12) },
+    key,
+    bytes.slice(12)
+  );
+  return new TextDecoder().decode(plaintext);
 }
 
 // ── Models endpoint ───────────────────────────────────────────────────────────
@@ -166,53 +232,16 @@ function handleModels(request, env) {
   return json(models);
 }
 
-// ── AI Chat handler ───────────────────────────────────────────────────────────
+// ── Encrypt endpoint ──────────────────────────────────────────────────────────
 
-async function handleChat(request, env) {
-  if (request.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders(request) });
+async function handleEncrypt(request, env) {
+  if (!env.ENCRYPTION_SECRET) {
+    return json({ error: 'Encryption not configured on this server' }, 503);
   }
 
-  // 1. Validate Google access token from Authorization header
-  const authHeader = request.headers.get('Authorization') ?? '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) {
-    return json({ error: 'Authorization header required' }, 401);
-  }
+  const auth = await authenticateRequest(request, env);
+  if (auth.error) return auth.error;
 
-  // 1. Validate Google access token and get user info
-  const claims = await verifyGoogleToken(token, env.GOOGLE_CLIENT_ID);
-  console.log('DEBUG claims:', claims);
-  if (!claims) {
-    return json({ error: 'Invalid or expired Google token' }, 401);
-  }
-
-  // Get email from userinfo endpoint (tokeninfo doesn't always include email)
-  let email = claims.email;
-  if (!email) {
-    console.log('DEBUG: tokeninfo has no email, trying userinfo endpoint');
-    const userInfo = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    console.log('DEBUG userinfo status:', userInfo.status);
-    if (userInfo.ok) {
-      const userData = await userInfo.json();
-      console.log('DEBUG userinfo data:', userData);
-      email = userData.email;
-    } else {
-      const errorText = await userInfo.text();
-      console.log('DEBUG userinfo error:', errorText);
-    }
-  }
-
-  // 2. Check email against the authorized list
-  const authorizedEmails = env.AUTHORIZED_EMAILS || '';
-  console.log('DEBUG: email:', email, 'authorizedEmails:', authorizedEmails);
-  if (!isEmailAuthorized(email, authorizedEmails)) {
-    return json({ error: 'Access denied', debug: { email: claims.email, allowed: authorizedEmails } }, 403);
-  }
-
-  // 3. Parse request body (Chat.Api.CompletionCreateParams)
   let body;
   try {
     body = await request.json();
@@ -220,15 +249,71 @@ async function handleChat(request, env) {
     return json({ error: 'Invalid JSON body' }, 400);
   }
 
-  // 4. Route to the correct provider by model name
+  const { key, texts } = body;
+  if (!key || !Array.isArray(texts) || texts.length === 0) {
+    return json({ error: 'key (string) and texts (non-empty array) are required' }, 400);
+  }
+
+  try {
+    const aesKey = await deriveKey(env.ENCRYPTION_SECRET, key);
+    const encrypted = await Promise.all(texts.map(t => encryptText(aesKey, t)));
+    return json({ encrypted });
+  } catch (e) {
+    return json({ error: 'Encryption failed: ' + e.message }, 500);
+  }
+}
+
+// ── AI Chat handler ───────────────────────────────────────────────────────────
+
+async function handleChat(request, env) {
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders(request) });
+  }
+
+  const auth = await authenticateRequest(request, env);
+  if (auth.error) return auth.error;
+
+  // Extract custom provider headers
+  const providerType = request.headers.get('X-Provider-Type') || '';
+  const providerKey  = request.headers.get('X-Provider-Key')  || '';
+  const providerUrl  = request.headers.get('X-Provider-URL')  || '';
+  const isEncrypted  = request.headers.get('X-Provider-Encrypted') === 'true';
+  const encClientKey = request.headers.get('X-Provider-Enc-Key') || '';
+
+  let resolvedApiKey = providerKey;
+  if (isEncrypted && providerKey && encClientKey) {
+    if (!env.ENCRYPTION_SECRET) {
+      return json({ error: 'Server-side encryption not configured' }, 503);
+    }
+    try {
+      const aesKey = await deriveKey(env.ENCRYPTION_SECRET, encClientKey);
+      resolvedApiKey = await decryptText(aesKey, providerKey);
+    } catch {
+      return json({ error: 'Failed to decrypt API key — key may be invalid or corrupted' }, 400);
+    }
+  }
+
+  const providerOverride = (providerType && resolvedApiKey)
+    ? { type: providerType, apiKey: resolvedApiKey, url: providerUrl }
+    : null;
+
+  // Parse request body (Chat.Api.CompletionCreateParams)
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  // Route to the correct provider by model name or override
   let stream;
   try {
-    stream = routeToProvider(body, env);
+    stream = routeToProvider(body, env, providerOverride);
   } catch (err) {
     return json({ error: err.message }, 400);
   }
 
-  // 5. Stream encoded frames back to the client
+  // Stream encoded frames back to the client
   const readable = new ReadableStream({
     async start(controller) {
       try {
@@ -253,10 +338,20 @@ async function handleChat(request, env) {
 
 // ── Provider routing ─────────────────────────────────────────────────────────
 
-function routeToProvider(body, env) {
+function routeToProvider(body, env, override = null) {
+  if (override) {
+    const { type, apiKey, url } = override;
+    const opts = { apiKey, request: { ...body } };
+    if (url) opts.baseURL = url;
+    if (type === 'openai')    return HashbrownOpenAI.stream.text(opts);
+    if (type === 'anthropic') return HashbrownAnthropic.stream.text(opts);
+    if (type === 'gemini')    return HashbrownGoogle.stream.text(opts);
+    throw new Error(`Unknown provider type: "${type}"`);
+  }
+
   const fullModel = body.model ?? '';
-  const [providerPrefix, modelName] = fullModel.includes(':') 
-    ? fullModel.split(':') 
+  const [providerPrefix, modelName] = fullModel.includes(':')
+    ? fullModel.split(':')
     : ['', fullModel];
 
   // Strip provider prefix from model name before passing to provider

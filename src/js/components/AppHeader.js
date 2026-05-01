@@ -101,14 +101,14 @@ const AppHeader = {
         <template v-if="document?.docType === 'asset'">
           <input v-model="rendererState.assetSearch" type="text" placeholder="Search assets…" class="px-3 py-1.5 text-sm rounded-md border focus:outline-none focus:ring-2 focus:ring-primary" style="border-color:hsl(var(--border));background-color:hsl(var(--background));color:hsl(var(--foreground));width:180px" />
           <button @click="$emit('asset-refresh')" class="inline-flex items-center px-2 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color:hsl(var(--border));background-color:hsl(var(--muted))" title="Refresh">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            <span class="ms" style="font-size:1rem">refresh</span>
           </button>
           <button @click="$emit('asset-upload')" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color:hsl(var(--border));background-color:hsl(var(--muted))" title="Upload files">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+            <span class="ms" style="font-size:1rem">upload</span>
             Upload
           </button>
           <button @click="$emit('asset-create-subfolder')" class="inline-flex items-center px-2 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color:hsl(var(--border));background-color:hsl(var(--muted))" title="New subfolder">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+            <span class="ms" style="font-size:1rem">create_new_folder</span>
           </button>
         </template>
 
@@ -117,7 +117,7 @@ const AppHeader = {
 
           <!-- Refresh: non-drawing view mode -->
           <button v-if="mode === 'view' && document.docType !== 'drawing'" @click="$emit('refresh-page')" class="inline-flex items-center px-2 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color:hsl(var(--border));background-color:hsl(var(--muted))" title="Refresh">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            <span class="ms" style="font-size:1rem">refresh</span>
           </button>
 
           <!-- Share: saved files only -->
@@ -176,19 +176,19 @@ const AppHeader = {
         <!-- ═══ CREATE + NOTIFICATIONS + DARK MODE + USER ═══ -->
         <div class="relative" ref="createDropdown">
           <button @click="showCreateMenu = !showCreateMenu" class="inline-flex items-center px-2 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color:hsl(var(--border));background-color:hsl(var(--muted))" title="Create new...">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            <span class="ms" style="font-size:1rem">add</span>
           </button>
           <div v-if="showCreateMenu" class="absolute right-0 mt-1 w-44 rounded-lg border shadow-lg z-50 py-1" style="background-color:hsl(var(--background));border-color:hsl(var(--border))">
             <button @click="createAction('page')" class="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center gap-2" style="color:hsl(var(--foreground))">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              <span class="ms" style="font-size:1rem">description</span>
               New Page
             </button>
             <button @click="createAction('snippet')" class="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center gap-2" style="color:hsl(var(--foreground))">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+              <span class="ms" style="font-size:1rem">code</span>
               New Snippet
             </button>
             <button @click="createAction('drawing')" class="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center gap-2" style="color:hsl(var(--foreground))">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h16v12H4zM8 20h8"/></svg>
+              <span class="ms" style="font-size:1rem">gesture</span>
               New Drawing
             </button>
           </div>
@@ -196,7 +196,7 @@ const AppHeader = {
 
         <div class="relative" ref="notifDropdown">
           <button @click="$emit('toggle-notifications')" class="relative inline-flex items-center px-2 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color:hsl(var(--border));background-color:hsl(var(--muted))" title="Notifications">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+            <span class="ms" style="font-size:1rem">notifications</span>
             <span v-if="notifications.length" class="notif-badge">{{ notifications.length > 99 ? '99+' : notifications.length }}</span>
           </button>
           <div v-if="showNotifications" class="absolute right-0 mt-1 w-80 max-h-96 overflow-y-auto rounded-lg border shadow-lg z-50" style="background-color:hsl(var(--background));border-color:hsl(var(--border))">
@@ -229,12 +229,11 @@ const AppHeader = {
         </div>
 
         <button @click="$emit('toggle-dark')" class="inline-flex items-center px-2 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color:hsl(var(--border));background-color:hsl(var(--muted))" title="Toggle dark mode">
-          <svg v-if="darkMode" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-          <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+          <span class="ms" style="font-size:1rem">{{ darkMode ? 'light_mode' : 'dark_mode' }}</span>
         </button>
 
         <button v-if="aiEnabled" @click="$emit('toggle-ai-chat')" class="inline-flex items-center px-2 py-1.5 text-sm rounded-md border hover:opacity-80 transition-colors" style="border-color:hsl(var(--border));background-color:hsl(var(--muted))" title="AI Chat">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+          <span class="ms" style="font-size:1rem">chat</span>
         </button>
 
         <!-- ═══ WIKI SELECTOR (dynamic multi-wiki mode only) ═══ -->
@@ -245,9 +244,9 @@ const AppHeader = {
             style="border-color:hsl(var(--border));background-color:hsl(var(--muted))"
             title="Switch wiki"
           >
-            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5S19.832 5.477 21 6.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+            <span class="ms" style="font-size:0.875rem">menu_book</span>
             <span class="max-w-[96px] truncate">{{ currentWiki || '—' }}</span>
-            <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            <span class="ms opacity-60" style="font-size:0.75rem">expand_more</span>
           </button>
           <div v-if="showWikiMenu" class="absolute right-0 mt-1 w-56 rounded-lg border shadow-lg z-50 py-1" style="background-color:hsl(var(--background));border-color:hsl(var(--border))">
             <div class="px-3 py-1.5 text-xs font-medium uppercase tracking-wider" style="color:hsl(var(--muted-foreground))">Wikis</div>
@@ -274,7 +273,7 @@ const AppHeader = {
             </button>
             <div class="border-t my-1" style="border-color:hsl(var(--border))"></div>
             <button @click="wikiAction('create')" class="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center gap-2" style="color:hsl(var(--primary))">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+              <span class="ms" style="font-size:1rem">add</span>
               New Wiki
             </button>
           </div>
@@ -299,7 +298,7 @@ const AppHeader = {
             </div>
             <div class="py-1">
               <button @click="logout()" class="w-full text-left px-4 py-2 text-sm flex items-center gap-2.5 hover:bg-accent transition-colors" style="color:hsl(var(--foreground))">
-                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                <span class="ms" style="font-size:1rem">logout</span>
                 Sign out
               </button>
             </div>
@@ -328,7 +327,7 @@ const AppHeader = {
             <!-- Add account -->
             <div style="border-top:1px solid hsl(var(--border))">
               <button @click="addUser()" class="w-full text-left px-4 py-2 text-sm flex items-center gap-2.5 hover:bg-accent transition-colors" style="color:hsl(var(--primary))">
-                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                <span class="ms" style="font-size:1rem">person_add</span>
                 Add account
               </button>
             </div>

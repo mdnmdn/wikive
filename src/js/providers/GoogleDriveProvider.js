@@ -489,7 +489,7 @@ class GoogleDriveProvider extends PersistenceProvider {
     const data = await res.json();
     if (!data.files || data.files.length === 0) {
       this._wikiDefsFileId = null;
-      return { id: null, wikis: [] };
+      return { id: null, wikis: [], aiProviders: [] };
     }
     this._wikiDefsFileId = data.files[0].id;
     const contentRes = await this._fetch(
@@ -497,14 +497,25 @@ class GoogleDriveProvider extends PersistenceProvider {
     );
     const text = await contentRes.text();
     try {
-      return { id: this._wikiDefsFileId, wikis: JSON.parse(text) };
+      const parsed = JSON.parse(text);
+      // Old format: plain array of wiki definitions
+      if (Array.isArray(parsed)) {
+        return { id: this._wikiDefsFileId, wikis: parsed, aiProviders: [], encryptionKey: null };
+      }
+      // New format: { wikis, aiProviders, encryptionKey }
+      return {
+        id: this._wikiDefsFileId,
+        wikis: parsed.wikis || [],
+        aiProviders: parsed.aiProviders || [],
+        encryptionKey: parsed.encryptionKey || null,
+      };
     } catch {
-      return { id: this._wikiDefsFileId, wikis: [] };
+      return { id: this._wikiDefsFileId, wikis: [], aiProviders: [], encryptionKey: null };
     }
   }
 
-  async saveWikiDefinitions(wikis) {
-    const content = JSON.stringify(wikis, null, 2);
+  async saveWikiDefinitions({ wikis, aiProviders = [], encryptionKey = null }) {
+    const content = JSON.stringify({ wikis, aiProviders, encryptionKey }, null, 2);
     if (this._wikiDefsFileId) {
       await this._fetch(
         `${this._config.DRIVE_UPLOAD_API}/files/${this._wikiDefsFileId}?uploadType=media`,

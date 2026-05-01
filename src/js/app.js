@@ -159,8 +159,12 @@ const app = Vue.createApp({
         :chat="aiChat"
         :model="aiModel"
         :page-context="currentPath"
+        :ai-providers="aiProviders"
+        :providers-saving="providersSaving"
+        :encryption-key="encryptionKey"
         @close="closeAiPanel"
         @model-change="onAiModelChange"
+        @providers-change="onProvidersChange"
         @page-refresh="refreshPage"
       ></ai-chat-panel>
 
@@ -370,6 +374,9 @@ const app = Vue.createApp({
       aiChat: null,
       aiPanelOpen: false,
       aiModel: 'gemini:gemini-2.0-flash',
+      aiProviders: [],
+      providersSaving: false,
+      encryptionKey: null,
     };
   },
   computed: {
@@ -455,8 +462,10 @@ const app = Vue.createApp({
       // Dynamic wiki selection: load definitions from Drive
       this.wikiLoading = true;
       try {
-        const { wikis } = await StorageService.getWikiDefinitions();
+        const { wikis, aiProviders, encryptionKey } = await StorageService.getWikiDefinitions();
         this.wikiList = wikis;
+        this.aiProviders = aiProviders || [];
+        await this._initEncryptionKey(encryptionKey);
 
         // Use the last-remembered wiki for this account if it still exists
         const savedName = localStorage.getItem('wiki_last:' + this.user.email);
@@ -533,7 +542,7 @@ const app = Vue.createApp({
       try {
         const newWiki = { wikiName: name, rootFolder: folder };
         const updated = [...this.wikiList, newWiki];
-        await StorageService.saveWikiDefinitions(updated);
+        await StorageService.saveWikiDefinitions({ wikis: updated, aiProviders: this.aiProviders, encryptionKey: this.encryptionKey });
         this.wikiList = updated;
         this.currentWikiName = name;
         localStorage.setItem('wiki_last:' + this.user.email, name);
@@ -560,7 +569,7 @@ const app = Vue.createApp({
       try {
         const newWiki = { wikiName: name, rootFolder: folder };
         const updated = [...this.wikiList, newWiki];
-        await StorageService.saveWikiDefinitions(updated);
+        await StorageService.saveWikiDefinitions({ wikis: updated, aiProviders: this.aiProviders, encryptionKey: this.encryptionKey });
         this.wikiList = updated;
         this.showCreateWikiDialog = false;
         await this.switchWiki(newWiki);
@@ -589,7 +598,7 @@ const app = Vue.createApp({
       } catch { return; }
       const updated = this.wikiList.filter(w => w.wikiName !== wiki.wikiName);
       try {
-        await StorageService.saveWikiDefinitions(updated);
+        await StorageService.saveWikiDefinitions({ wikis: updated, aiProviders: this.aiProviders, encryptionKey: this.encryptionKey });
         this.wikiList = updated;
         if (localStorage.getItem('wiki_last:' + this.user.email) === wiki.wikiName) {
           localStorage.removeItem('wiki_last:' + this.user.email);
@@ -1138,26 +1147,43 @@ const app = Vue.createApp({
     },
 
     async openAiPanel() {
-      console.log('openAiPanel called, aiChat:', !!this.aiChat, 'aiPanelOpen:', this.aiPanelOpen);
       this.aiPanelOpen = true;
-      console.log('After setting true, aiPanelOpen:', this.aiPanelOpen);
       if (!this.aiChat) {
         try {
-          console.log('Creating AI chat...');
-          if (typeof window.fetchAiModels === 'function') {
-            await window.fetchAiModels();
+          // Build model list: from configured providers or from backend
+          if (this.aiProviders && this.aiProviders.length > 0) {
+            window.AI_MODELS = this.aiProviders.flatMap(p =>
+              (p.models || []).map(m => ({ label: `${p.name} › ${m}`, value: `${p.id}::${m}` }))
+            );
+            if (!(window.AI_MODELS).find(m => m.value === this.aiModel)) {
+              this.aiModel = window.AI_MODELS[0]?.value ?? this.aiModel;
+            }
+          } else {
+            if (typeof window.fetchAiModels === 'function') await window.fetchAiModels();
+            if (!(window.AI_MODELS ?? []).find(m => m.value === this.aiModel)) {
+              this.aiModel = window.AI_MODELS[0]?.value ?? this.aiModel;
+            }
+            if (typeof getDefaultModel === 'function') this.aiModel = getDefaultModel();
           }
-          if (this.aiModel && !(window.AI_MODELS ?? []).find(m => m.value === this.aiModel)) {
-            this.aiModel = window.AI_MODELS[0]?.value ?? this.aiModel;
+
+          // Resolve provider from model value (format: "providerId::modelName")
+          let provider = null;
+          let modelName = this.aiModel;
+          if (this.aiModel && this.aiModel.includes('::')) {
+            const sep = this.aiModel.indexOf('::');
+            const providerId = this.aiModel.slice(0, sep);
+            modelName = this.aiModel.slice(sep + 2);
+            provider = this.aiProviders.find(p => p.id === providerId) || null;
           }
-          this.aiModel = typeof getDefaultModel === 'function' ? getDefaultModel() : 'gemini-2.0-flash-lite';
+
           const tools = typeof getWikiTools === 'function' ? await getWikiTools() : [];
           this.aiChat = await createAiChat({
-            model: this.aiModel,
+            model: modelName,
+            provider,
             system: window.WIKI_ASSISTANT_SYSTEM || 'You are a helpful AI assistant.',
-            tools: tools,
+            tools,
+            encryptionKey: this.encryptionKey,
           });
-          console.log('AI chat created, aiChat:', !!this.aiChat, 'aiPanelOpen:', this.aiPanelOpen);
           this.aiChat.chat.messages.subscribe(msgs => { this.aiMessages = msgs; });
           this.aiChat.chat.isGenerating.subscribe(v => { this.aiGenerating = v; });
         } catch (e) {
@@ -1173,7 +1199,6 @@ const app = Vue.createApp({
     },
 
     toggleAiChat() {
-      console.log('toggleAiChat, aiPanelOpen:', this.aiPanelOpen);
       if (this.aiPanelOpen) {
         this.closeAiPanel();
       } else {
@@ -1181,9 +1206,60 @@ const app = Vue.createApp({
       }
     },
 
-    onAiModelChange(newModel) {
+    async onAiModelChange(newModel) {
       this.aiModel = newModel;
       localStorage.setItem('wiki:ai-model', newModel);
+      // Recreate chat so the new provider config/model takes effect immediately
+      if (this.aiChat) {
+        this.aiChat.destroy?.();
+        this.aiChat = null;
+        await this.openAiPanel();
+      }
+    },
+
+    async _initEncryptionKey(encryptionKeyFromDrive) {
+      if (encryptionKeyFromDrive) {
+        this.encryptionKey = encryptionKeyFromDrive;
+        localStorage.setItem('wiki:enc-key', encryptionKeyFromDrive);
+        return;
+      }
+      const localKey = localStorage.getItem('wiki:enc-key');
+      if (localKey) {
+        this.encryptionKey = localKey;
+        // Also save to Drive for other devices
+        StorageService.saveWikiDefinitions({
+          wikis: this.wikiList,
+          aiProviders: this.aiProviders,
+          encryptionKey: this.encryptionKey,
+        }).catch(() => {});
+        return;
+      }
+      if (typeof window.generateEncryptionKey === 'function') {
+        this.encryptionKey = window.generateEncryptionKey();
+        localStorage.setItem('wiki:enc-key', this.encryptionKey);
+        StorageService.saveWikiDefinitions({
+          wikis: this.wikiList,
+          aiProviders: this.aiProviders,
+          encryptionKey: this.encryptionKey,
+        }).catch(() => {});
+      }
+    },
+
+    async onProvidersChange(providers) {
+      this.aiProviders = providers;
+      // Rebuild model list from updated providers
+      if (providers.length > 0) {
+        window.AI_MODELS = providers.flatMap(p =>
+          (p.models || []).map(m => ({ label: `${p.name} › ${m}`, value: `${p.id}::${m}` }))
+        );
+      }
+      this.providersSaving = true;
+      try {
+        await StorageService.saveWikiDefinitions({ wikis: this.wikiList, aiProviders: providers, encryptionKey: this.encryptionKey });
+      } catch (e) {
+        this.showToast('Failed to save AI settings: ' + e.message, 'error');
+      }
+      this.providersSaving = false;
     },
 
     closeAnonymousShareDialog() {
