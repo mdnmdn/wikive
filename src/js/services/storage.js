@@ -18,7 +18,7 @@ const StorageService = {
   'createFolderPath', 'getFileContent', 'getFileMetadata',
   'createFile', 'updateFile', 'uploadBinary', 'deleteFile',
   'renameFile', 'createFolder', 'getSpecialFolderId',
-  'getAssetsFolderId', 'getDrawingsFolderId', 'getSnippetsFolderId',
+  'getAssetsFolderId', 'getDrawingsFolderId', 'getSnippetsFolderId', 'getNotebooksFolderId',
   'listSnippets', 'createSnippet', 'updateSnippet', 'createDrawing',
   'getDownloadUrl', 'getAuthHeaders', 'ensureHomePage', 'purgeExpiredSnippets',
   'moveFile', 'copyFile', 'enableAnonymousShare', 'getAnonymousShareUrl',

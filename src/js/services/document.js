@@ -3,6 +3,7 @@ const SPECIAL_FOLDERS = {
   ASSETS: '_assets',
   SNIPPETS: '_snippets',
   DRAWINGS: '_drawings',
+  NOTEBOOKS: '_notebooks',
 };
 
 const DocumentService = {
@@ -11,7 +12,9 @@ const DocumentService = {
     const pp = (parentPath || '').split('/')[0];
     if (pp === SPECIAL_FOLDERS.SNIPPETS) return 'snippet';
     if (file.name && file.name.endsWith('.excalidraw')) return 'drawing';
+    if (file.name && file.name.endsWith('.ipynb')) return 'notebook';
     if (pp === SPECIAL_FOLDERS.ASSETS) return 'asset';
+    if (pp === SPECIAL_FOLDERS.NOTEBOOKS) return 'notebook';
     if (file.appProperties?.docType === 'snippet') return 'snippet';
     if (file.name && file.name.endsWith('.md')) return 'markdown';
     return 'asset';
@@ -43,6 +46,7 @@ const DocumentService = {
     if (first === SPECIAL_FOLDERS.ASSETS) return 'assets';
     if (first === SPECIAL_FOLDERS.SNIPPETS) return 'snippets';
     if (first === SPECIAL_FOLDERS.DRAWINGS) return 'drawings';
+    if (first === SPECIAL_FOLDERS.NOTEBOOKS) return 'notebooks';
     return null;
   },
 };

@@ -20,6 +20,7 @@ const SidebarTree = {
           <!-- docType icon -->
           <span v-if="itemDocType(item) === 'snippet'" class="ms icon" style="font-size: 1rem">code</span>
           <span v-else-if="itemDocType(item) === 'drawing'" class="ms icon" style="font-size: 1rem">gesture</span>
+          <span v-else-if="itemDocType(item) === 'notebook'" class="ms icon" style="font-size: 1rem">terminal</span>
           <span v-else-if="itemDocType(item) === 'asset' && !item.isFolder" class="ms icon" style="font-size: 1rem">attach_file</span>
           <span v-else-if="!item.isFolder" class="ms icon" style="font-size: 1rem">description</span>
           <span class="truncate">{{ displayName(item) }}</span>
@@ -51,10 +52,11 @@ const SidebarTree = {
       if (this.perspective && this.perspective !== 'all') {
         result = result.filter(item => {
           const dt = this.itemDocType(item);
-          const isSpecialFolder = item.isFolder && (item.name === '_snippets' || item.name === '_drawings' || item.name === '_assets');
+          const isSpecialFolder = item.isFolder && (item.name === '_snippets' || item.name === '_drawings' || item.name === '_assets' || item.name === '_notebooks');
           if (this.perspective === 'pages') return (dt === 'markdown' || (dt === 'folder' && !isSpecialFolder));
           if (this.perspective === 'snippets') return dt === 'snippet' || (item.isFolder && item.name === '_snippets');
           if (this.perspective === 'drawings') return dt === 'drawing' || (item.isFolder && item.name === '_drawings');
+          if (this.perspective === 'notebooks') return dt === 'notebook' || (item.isFolder && item.name === '_notebooks');
           if (this.perspective === 'assets') return dt === 'asset' || (item.isFolder && item.name === '_assets');
           return true;
         });
@@ -102,6 +104,7 @@ const SidebarTree = {
             if (this.perspective && this.basePath === '') {
               if ((this.perspective === 'snippets' && item.name === '_snippets') ||
                   (this.perspective === 'drawings' && item.name === '_drawings') ||
+                  (this.perspective === 'notebooks' && item.name === '_notebooks') ||
                   (this.perspective === 'assets' && item.name === '_assets')) {
                 this.expanded[item.id] = true;
               }
@@ -112,7 +115,7 @@ const SidebarTree = {
       this.loading = false;
     },
     displayName(item) {
-      return item.name.replace(/\.md$/, '').replace(/\.excalidraw$/, '');
+      return item.name.replace(/\.md$/, '').replace(/\.excalidraw$/, '').replace(/\.ipynb$/, '');
     },
     itemPath(item) {
       const base = this.basePath ? this.basePath + '/' : '';
@@ -123,10 +126,12 @@ const SidebarTree = {
       return DocumentService.resolveDocumentType(item, path);
     },
     navigateDocument(item) {
-      // For items inside _snippets or _drawings, use file ID in URL
+      // For items inside _snippets, _drawings or _notebooks, use file ID in URL
       const dt = this.itemDocType(item);
-      if (!item.isFolder && (dt === 'snippet' || dt === 'drawing')) {
-        const specialFolder = dt === 'snippet' ? '_snippets' : '_drawings';
+      if (!item.isFolder && (dt === 'snippet' || dt === 'drawing' || dt === 'notebook')) {
+        let specialFolder = '_snippets';
+        if (dt === 'drawing') specialFolder = '_drawings';
+        else if (dt === 'notebook') specialFolder = '_notebooks';
         window.location.hash = '#/' + specialFolder + '/' + item.id;
       } else {
         window.location.hash = '#/' + this.itemPath(item);
@@ -135,8 +140,10 @@ const SidebarTree = {
     toggleExpand(item) { this.expanded[item.id] = !this.expanded[item.id]; },
     isActive(item) {
       const dt = this.itemDocType(item);
-      if (!item.isFolder && (dt === 'snippet' || dt === 'drawing')) {
-        const specialFolder = dt === 'snippet' ? '_snippets' : '_drawings';
+      if (!item.isFolder && (dt === 'snippet' || dt === 'drawing' || dt === 'notebook')) {
+        let specialFolder = '_snippets';
+        if (dt === 'drawing') specialFolder = '_drawings';
+        else if (dt === 'notebook') specialFolder = '_notebooks';
         return this.currentPath === specialFolder + '/' + item.id;
       }
       return this.currentPath === this.itemPath(item);
@@ -175,6 +182,9 @@ const Sidebar = {
         </button>
         <button @click="setPerspective('drawings')" class="nav-btn" :class="{ active: perspective === 'drawings' }" title="Drawings">
           <span class="ms">gesture</span>
+        </button>
+        <button @click="setPerspective('notebooks')" class="nav-btn" :class="{ active: perspective === 'notebooks' }" title="Notebooks">
+          <span class="ms">terminal</span>
         </button>
         <button @click="setPerspective('assets')" class="nav-btn" :class="{ active: perspective === 'assets' }" title="Assets">
           <span class="ms">folder_open</span>
@@ -256,8 +266,9 @@ const Sidebar = {
       // Navigate to the matching route
       if (p === 'snippets' && !this.currentPath.startsWith('_snippets')) window.location.hash = '#/_snippets';
       else if (p === 'drawings' && !this.currentPath.startsWith('_drawings')) window.location.hash = '#/_drawings';
+      else if (p === 'notebooks' && !this.currentPath.startsWith('_notebooks')) window.location.hash = '#/_notebooks';
       else if (p === 'assets' && !this.currentPath.startsWith('_assets')) window.location.hash = '#/_assets';
-      else if ((p === 'all' || p === 'pages') && (this.currentPath.startsWith('_snippets') || this.currentPath.startsWith('_drawings') || this.currentPath.startsWith('_assets'))) window.location.hash = '#/';
+      else if ((p === 'all' || p === 'pages') && (this.currentPath.startsWith('_snippets') || this.currentPath.startsWith('_drawings') || this.currentPath.startsWith('_notebooks') || this.currentPath.startsWith('_assets'))) window.location.hash = '#/';
     },
     onAssetFileInput(e) {
       const files = Array.from(e.target.files || []);

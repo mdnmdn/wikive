@@ -311,6 +311,7 @@ class GoogleDriveProvider extends PersistenceProvider {
   getAssetsFolderId()   { return this.getSpecialFolderId('_assets'); }
   getDrawingsFolderId() { return this.getSpecialFolderId('_drawings'); }
   getSnippetsFolderId() { return this.getSpecialFolderId('_snippets'); }
+  getNotebooksFolderId() { return this.getSpecialFolderId('_notebooks'); }
 
   async listSnippets(folderId) {
     const q = `'${folderId}' in parents and trashed=false`;

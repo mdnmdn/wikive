@@ -22,6 +22,8 @@ js/renderers/
   SnippetEditor.js    — editable Ace with name/type/expiry controls
   DrawingViewer.js    — read-only Excalidraw display
   DrawingEditor.js    — Excalidraw editor with save/fullscreen
+  NotebookViewer.js   — JupyterLite REPL embed
+  NotebookEditor.js   — JupyterLite Lab embed
   AssetViewer.js      — asset grid: preview, upload, rename, delete
   FolderViewer.js     — folder contents as cards, or home.md/index.md if present
 js/providers/
@@ -44,11 +46,11 @@ assets/
 
 The architecture is built around three ideas:
 
-1. **Document** — everything is a document. Markdown pages, snippets, drawings, assets, and folders are all represented by a single `Document` shape with a `docType` field (`markdown`, `snippet`, `drawing`, `asset`, `folder`).
+1. **Document** — everything is a document. Markdown pages, snippets, drawings, notebooks, assets, and folders are all represented by a single `Document` shape with a `docType` field (`markdown`, `snippet`, `drawing`, `notebook`, `asset`, `folder`).
 
 2. **Renderer** — each document type has a view component and an optional edit component. `DocumentRenderer` dispatches to the correct one based on `docType` + `mode`. The registry lives in `RendererService`.
 
-3. **Perspective** — the sidebar shows a single unified tree. Perspective filter buttons (All, Pages, Snippets, Drawings, Assets) narrow the tree to matching items. Special folders (`_snippets`, `_drawings`, `_assets`) auto-expand when their perspective is active.
+3. **Perspective** — the sidebar shows a single unified tree. Perspective filter buttons (All, Pages, Snippets, Drawings, Notebooks, Assets) narrow the tree to matching items. Special folders (`_snippets`, `_drawings`, `_notebooks`, `_assets`) auto-expand when their perspective is active.
 
 4. **Provider Abstraction** — the wiki decouples from any specific backend. Components interact with `AuthManager` and `StorageService` facades, which delegate to a `PROVIDER` (e.g. Google Drive, OneDrive). This makes the app extensible to any storage or auth backend.
 
@@ -63,6 +65,7 @@ The architecture is built around three ideas:
 - Toast UI Editor for page editing.
 - Ace Editor for snippets.
 - Excalidraw Web Component (built from `components/excalidraw-webcomponent`).
+- JupyterLite (JS/WASM) for notebooks.
 - Google Identity Services + Google Drive REST API.
 
 ## Script loading and boot flow
@@ -105,6 +108,7 @@ The architecture is built around three ideas:
 - Wiki pages: `#/path/to/page` resolves to `page.md` (preferred) or a folder.
 - Snippets: `#/_snippets` shows the folder; `#/_snippets/<fileId>` opens a specific snippet.
 - Drawings: `#/_drawings` shows the folder; `#/_drawings/<fileId>` opens a specific drawing.
+- Notebooks: `#/_notebooks` shows the folder; `#/_notebooks/<fileId>` opens a specific notebook.
 - Assets: `#/_assets` opens the asset viewer (subfolder navigation handled internally).
 - Route resolution: `onRouteChange()` calls `DocumentService.getSpecialFolder()` to detect special routes, then either `resolveSpecialRoute()` or `resolveWikiRoute()`.
 
@@ -129,7 +133,7 @@ The architecture is built around three ideas:
 | `AppHeader` | `js/components/AppHeader.js` | Header bar with context-aware buttons. "+" dropdown creates any document type. Edit/Save/Delete buttons appear based on `document.docType` and `RendererService.canEdit()`. It also exposes anonymous share for markdown pages, snippets, and drawings. |
 | `Breadcrumb` | `js/components/Breadcrumb.js` | Path breadcrumb. Resolves snippet IDs and drawing filenames to human-readable names using the `document` prop. |
 | `Sidebar` | `js/components/Sidebar.js` | Perspective filter buttons, search input, asset upload zone. Contains `SidebarTree` for recursive folder display. |
-| `SidebarTree` | `js/components/Sidebar.js` | Recursive tree component. Shows docType-aware icons (document, code, canvas, paperclip). Snippet items show expiry badges. Navigation uses file IDs for snippets/drawings. |
+| `SidebarTree` | `js/components/Sidebar.js` | Recursive tree component. Shows docType-aware icons (document, code, canvas, terminal, paperclip). Snippet items show expiry badges. Navigation uses file IDs for snippets/drawings/notebooks. |
 | `DocumentRenderer` | `js/components/DocumentRenderer.js` | Dispatcher. Receives `document` + `mode`, resolves component name via `RendererService`, renders via `<component :is>`. |
 | `PageNotFound` | `js/components/PageNotFound.js` | 404 page with "Create this page" button. |
 
@@ -140,6 +144,7 @@ The architecture is built around three ideas:
 | Markdown | `js/renderers/Markdown{Viewer,Editor}.js` | marked.js + mermaid + highlight.js + link interception | Toast UI Editor |
 | Snippet | `js/renderers/Snippet{Viewer,Editor}.js` | Read-only Ace with copy button and expiry display | Editable Ace with name, language, and expiry controls |
 | Drawing | `js/renderers/Drawing{Viewer,Editor}.js` | Read-only Excalidraw with download | Excalidraw editor with save and fullscreen |
+| Notebook | `js/renderers/Notebook{Viewer,Editor}.js` | JupyterLite REPL | JupyterLite Lab |
 | Asset | `js/renderers/AssetViewer.js` | Grid with preview modal, upload, rename, delete, subfolder navigation | (not editable) |
 | Folder | `js/renderers/FolderViewer.js` | If `home.md` or `index.md` exists, renders it as markdown. Otherwise shows contents as cards with a "Create Page" button. | (not editable) |
 
