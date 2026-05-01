@@ -18,7 +18,7 @@ const NotebookEditor = {
     return {
       loading: false,
       error: null,
-      jupyterUrl: 'https://jupyterlite.github.io/demo/lab/index.html'
+      jupyterUrl: '/jupyterlite/lab/index.html'
     };
   },
   watch: {
@@ -36,8 +36,7 @@ const NotebookEditor = {
   },
   methods: {
     updateJupyterUrl() {
-        // JupyterLab full interface
-        const baseUrl = 'https://jupyterlite.github.io/demo/lab/index.html';
+        const baseUrl = '/jupyterlite/lab/index.html';
         const params = new URLSearchParams({
             theme: this.darkMode ? 'JupyterLab Dark' : 'JupyterLab Light'
         });
@@ -45,8 +44,6 @@ const NotebookEditor = {
         this.jupyterUrl = `${baseUrl}?${params.toString()}`;
     },
     getContent() {
-        // Since it's an iframe to an external site, we can't easily get the content
-        // unless we implement a custom JupyterLite host or use postMessage if supported.
         return this.content;
     },
     triggerSave() {

@@ -18,7 +18,7 @@ const NotebookViewer = {
     return {
       loading: false,
       error: null,
-      jupyterUrl: 'https://jupyterlite.github.io/demo/repl/index.html?kernel=python&toolbar=1'
+      jupyterUrl: '/jupyterlite/repl/index.html?kernel=python&toolbar=1'
     };
   },
   watch: {
@@ -33,18 +33,12 @@ const NotebookViewer = {
   },
   methods: {
     updateJupyterUrl() {
-        // For now we use the REPL version as suggested in the quickstart for embedding
-        // Later we can improve this to pass the content if possible
-        const baseUrl = 'https://jupyterlite.github.io/demo/repl/index.html';
+        const baseUrl = '/jupyterlite/repl/index.html';
         const params = new URLSearchParams({
             kernel: 'python',
             toolbar: '1',
             theme: this.darkMode ? 'JupyterLab Dark' : 'JupyterLab Light'
         });
-
-        // If we have content, we might try to pass it via a provider if JupyterLite supports it
-        // But for a simple integration, we just point to the REPL.
-
         this.jupyterUrl = `${baseUrl}?${params.toString()}`;
     }
   }
