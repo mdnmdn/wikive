@@ -1,0 +1,69 @@
+name: Deploy to Cloudflare Workers
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'default'
+        type: choice
+        options:
+          - default
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Prepare Deployment Directory
+        run: |
+          ENV=${{ github.event.inputs.environment || 'default' }}
+          mkdir __deploy
+
+          # Copy worker files
+          cp -r worker/* __deploy/
+
+          # Copy frontend files to __deploy/public (as configured in wrangler.toml)
+          mkdir -p __deploy/public
+          cp -r src/* __deploy/public/
+
+          # Create version.json
+          VERSION_TAG=${GITHUB_REF#refs/tags/}
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            BUILD_BRANCH="N/A"
+          else
+            BUILD_BRANCH=${GITHUB_REF#refs/heads/}
+            VERSION_TAG="N/A"
+          fi
+
+          echo "{\"version\": \"$VERSION_TAG\", \"buildDate\": \"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\", \"branch\": \"$BUILD_BRANCH\", \"actionId\": \"${GITHUB_RUN_ID}\"}" > __deploy/public/version.json
+
+          # Inject environment config
+          if [ -f "_devops/$ENV/config.js" ]; then
+            cp "_devops/$ENV/config.js" __deploy/public/config.js
+          else
+            echo "Warning: _devops/$ENV/config.js not found, using default if available"
+          fi
+
+      - name: Install Worker Dependencies
+        working-directory: __deploy
+        run: npm install
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: __deploy
+          command: deploy
