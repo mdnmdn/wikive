@@ -92,6 +92,7 @@ const app = Vue.createApp({
         @new-page="showNewPageDialog"
         @new-snippet="createNewSnippet"
         @new-drawing="createNewDrawing"
+        @new-notebook="createNewNotebook"
         @delete-page="deleteDocument"
         @toggle-dark="toggleDarkMode"
         @refresh-page="refreshPage"
@@ -193,6 +194,24 @@ const app = Vue.createApp({
               </template>
               <template v-else><span>Create</span></template>
             </button>
+          </div>
+        </div>
+      </div>
+      <!-- New Notebook dialog -->
+      <div v-if="showNewNotebook" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="showNewNotebook = false">
+        <div class="rounded-xl shadow-xl p-6 w-full max-w-md mx-4" style="background-color: hsl(var(--background)); color: hsl(var(--foreground))">
+          <h3 class="text-lg font-semibold mb-4">New Notebook</h3>
+          <input
+            v-model="newNotebookName"
+            @keyup.enter="newNotebookName.trim() && doCreateNewNotebook(newNotebookName)"
+            class="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            style="border-color: hsl(var(--border)); color: hsl(var(--foreground)); background-color: hsl(var(--background))"
+            placeholder="Notebook name"
+            ref="newNotebookInput"
+          />
+          <div class="flex justify-end gap-2 mt-4">
+            <button @click="showNewNotebook = false" class="px-4 py-2 text-sm rounded-lg border hover:opacity-80" style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))">Cancel</button>
+            <button @click="doCreateNewNotebook(newNotebookName)" :disabled="!newNotebookName.trim()" class="px-4 py-2 text-sm rounded-lg disabled:opacity-50" style="background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground))">Create</button>
           </div>
         </div>
       </div>
@@ -358,6 +377,10 @@ const app = Vue.createApp({
       showNewDrawing: false,
       newDrawingName: '',
       pendingNewDrawingName: '',
+      pendingNewNotebook: false,
+      showNewNotebook: false,
+      newNotebookName: '',
+      pendingNewNotebookName: '',
       confirmDialog: null,
       showRenameMove: false,
       renameMoveValue: '',
@@ -387,6 +410,7 @@ const app = Vue.createApp({
       const dt = this.document?.docType;
       if (dt === 'drawing') return 'Rename Drawing';
       if (dt === 'snippet') return 'Rename Snippet';
+      if (dt === 'notebook') return 'Rename Notebook';
       return 'Rename / Move Page';
     },
     mainContentClass() {
@@ -394,6 +418,7 @@ const app = Vue.createApp({
       return {
         'snippets-full': dt === 'snippet',
         'drawings-full': dt === 'drawing',
+        'notebooks-full': dt === 'notebook',
       };
     },
   },
@@ -648,8 +673,8 @@ const app = Vue.createApp({
           this.pendingEditPath = null;
         }
 
-        // Drawings are always in edit mode
-        if (this.document?.docType === 'drawing') {
+        // Drawings and Notebooks are always in edit mode
+        if (this.document?.docType === 'drawing' || this.document?.docType === 'notebook') {
           this.mode = 'edit';
         }
 
@@ -684,6 +709,27 @@ const app = Vue.createApp({
           });
           this.mode = 'edit';
         }
+
+        // Open blank new notebook in edit mode
+        if (this.pendingNewNotebook && this.currentPath === '_notebooks') {
+          this.pendingNewNotebook = false;
+          const folderId = await StorageService.getNotebooksFolderId();
+          const notebookName = this.pendingNewNotebookName || '';
+          this.pendingNewNotebookName = '';
+          const doc = DocumentService.toDocument(
+            { id: null, name: notebookName, isFolder: false }, folderId, '_notebooks'
+          );
+          doc.docType = 'notebook';
+          doc.type = 'file';
+          this.document = doc;
+          this.fileContent = JSON.stringify({
+            cells: [],
+            metadata: {},
+            nbformat: 4,
+            nbformat_minor: 5
+          });
+          this.mode = 'edit';
+        }
       } catch (e) {
         this.showToast('Error loading: ' + e.message, 'error');
       }
@@ -701,6 +747,7 @@ const app = Vue.createApp({
       if (specialFolder === 'assets') folderId = await StorageService.getAssetsFolderId();
       else if (specialFolder === 'snippets') folderId = await StorageService.getSnippetsFolderId();
       else if (specialFolder === 'drawings') folderId = await StorageService.getDrawingsFolderId();
+        else if (specialFolder === 'notebooks') folderId = await StorageService.getNotebooksFolderId();
 
       if (!itemId) {
         // Root of special folder — show as folder
@@ -718,6 +765,8 @@ const app = Vue.createApp({
         } else if (specialFolder === 'drawings') {
           // Show drawing list — render as folder with drawing items
           this.document.docType = 'folder';
+        } else if (specialFolder === 'notebooks') {
+          this.document.docType = 'folder';
         }
         return;
       }
@@ -731,6 +780,10 @@ const app = Vue.createApp({
         const meta = await StorageService.getFileMetadata(itemId);
         this.document = DocumentService.toDocument(meta, folderId, this.currentPath);
         this.fileContent = await StorageService.getFileContent(itemId);
+        } else if (specialFolder === 'notebooks') {
+          const meta = await StorageService.getFileMetadata(itemId);
+          this.document = DocumentService.toDocument(meta, folderId, this.currentPath);
+          this.fileContent = await StorageService.getFileContent(itemId);
       } else {
         // Asset subfolder navigation is handled by the AssetViewer
         this.document = DocumentService.toDocument(
@@ -906,6 +959,27 @@ const app = Vue.createApp({
       }
     },
 
+    createNewNotebook() {
+      this.newNotebookName = '';
+      this.showNewNotebook = true;
+      this.$nextTick(() => this.$refs.newNotebookInput?.focus());
+    },
+
+    doCreateNewNotebook(name) {
+      name = (name || '').trim();
+      if (!name) return;
+      if (!name.endsWith('.ipynb')) name += '.ipynb';
+      this.pendingNewNotebookName = name;
+      this.showNewNotebook = false;
+      if (this.currentPath === '_notebooks') {
+        this.pendingNewNotebook = true;
+        this.onRouteChange();
+      } else {
+        this.pendingNewNotebook = true;
+        window.location.hash = '#/_notebooks';
+      }
+    },
+
     showConfirm(title, message, confirmLabel) {
       return new Promise((resolve, reject) => {
         this.confirmDialog = {
@@ -1041,6 +1115,23 @@ const app = Vue.createApp({
       if (!newValue) { this.showRenameMove = false; return; }
       const docType = this.document?.docType;
 
+      if (docType === 'notebook') {
+        let newName = newValue;
+        if (!newName.endsWith('.ipynb')) newName += '.ipynb';
+        if (newName === this.document.name) { this.showRenameMove = false; return; }
+        this.renamingMoving = true;
+        try {
+          await StorageService.renameFile(this.document.id, newName, this.document.parentId);
+          this.document = { ...this.document, name: newName };
+          CacheService.remove('listing:' + this.document.parentId);
+          this.showToast('Notebook renamed', 'success');
+          this.showRenameMove = false;
+          this.refreshSidebar();
+        } catch (e) { this.showToast('Failed: ' + e.message, 'error'); }
+        this.renamingMoving = false;
+        return;
+      }
+
       if (docType === 'drawing') {
         const newName = newValue.replace(/\.excalidraw$/, '') + '.excalidraw';
         if (newName === this.document.name) { this.showRenameMove = false; return; }
@@ -1123,6 +1214,13 @@ const app = Vue.createApp({
           CacheService.remove('listing:' + doc.parentId);
           this.refreshSidebar();
           window.location.hash = '#/_drawings/' + data.id;
+        } else if (doc.docType === 'notebook') {
+          const baseName = doc.name.replace(/\.ipynb$/, '');
+          const data = await StorageService.copyFile(doc.id, baseName + '-copy.ipynb', doc.parentId);
+          this.showToast('Notebook cloned', 'success');
+          CacheService.remove('listing:' + doc.parentId);
+          this.refreshSidebar();
+          window.location.hash = '#/_notebooks/' + data.id;
         }
       } catch (e) {
         this.showToast('Failed to clone: ' + e.message, 'error');
@@ -1331,6 +1429,8 @@ app.component('snippet-viewer', SnippetViewer);
 app.component('snippet-editor', SnippetEditor);
 app.component('drawing-viewer', DrawingViewer);
 app.component('drawing-editor', DrawingEditor);
+app.component('notebook-viewer', NotebookViewer);
+app.component('notebook-editor', NotebookEditor);
 app.component('asset-viewer', AssetViewer);
 app.component('folder-viewer', FolderViewer);
 app.component('ai-chat-panel', AiChatPanel);

@@ -18,6 +18,7 @@ class PersistenceProvider {
   async getAssetsFolderId() { throw new Error('Not implemented: getAssetsFolderId'); }
   async getDrawingsFolderId() { throw new Error('Not implemented: getDrawingsFolderId'); }
   async getSnippetsFolderId() { throw new Error('Not implemented: getSnippetsFolderId'); }
+  async getNotebooksFolderId() { throw new Error('Not implemented: getNotebooksFolderId'); }
   async listSnippets(folderId) { throw new Error('Not implemented: listSnippets'); }
   async createSnippet(name, content, type, expiryTs, duration) { throw new Error('Not implemented: createSnippet'); }
   async updateSnippet(fileId, name, content, type, expiryTs, duration) { throw new Error('Not implemented: updateSnippet'); }

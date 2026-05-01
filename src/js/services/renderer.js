@@ -6,6 +6,7 @@ const RendererService = {
     drawing:  { view: 'drawing-viewer',   edit: 'drawing-editor' },
     asset:    { view: 'asset-viewer',     edit: null },
     folder:   { view: 'folder-viewer',    edit: null },
+    notebook: { view: 'notebook-viewer',  edit: 'notebook-editor' },
   },
 
   getRenderer(docType, mode) {
