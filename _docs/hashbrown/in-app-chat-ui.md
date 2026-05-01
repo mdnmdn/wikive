@@ -277,12 +277,7 @@ Let the user pick the provider from the header:
 ```js
 // In data():
 AI_MODELS: [
-  { label: 'Gemini 2.0 Flash',      value: 'gemini-2.0-flash' },
-  { label: 'Gemini 1.5 Pro',        value: 'gemini-1.5-pro' },
-  { label: 'Claude 3.5 Sonnet',     value: 'claude-3-5-sonnet-20241022' },
-  { label: 'Claude 3.5 Haiku',      value: 'claude-3-5-haiku-20241022' },
-  { label: 'GPT-4o',                value: 'gpt-4o' },
-  { label: 'GPT-4o mini',           value: 'gpt-4o-mini' },
+  { label: 'Gemini Flash lite',      value: 'gemini-flash-lite-latest ' },
 ],
 
 // In template (inside the AI panel header or a settings dropdown):

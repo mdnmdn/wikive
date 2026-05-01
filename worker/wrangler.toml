@@ -2,6 +2,10 @@ name = "wiki-realtime"
 main = "src/index.js"
 compatibility_date = "2024-12-01"
 
+compatibility_flags = [ "nodejs_compat" ]
+# Set this to today's date
+# compatibility_date = "2026-04-29"
+
 [durable_objects]
 bindings = [
   { name = "WIKI_ROOM", class_name = "WikiRoom" }
@@ -9,7 +13,10 @@ bindings = [
 
 [[migrations]]
 tag = "v1"
-new_classes = ["WikiRoom"]
+new_sqlite_classes = ["WikiRoom"]
+
+[vars]
+AUTHORIZED_EMAILS = "marco.denittis@synesthesia.it,marco.denittis@peoplefirst.ws"
 
 # GOOGLE_CLIENT_ID is set as a secret (never in plain text here):
 #   npx wrangler secret put GOOGLE_CLIENT_ID

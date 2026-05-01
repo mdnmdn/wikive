@@ -66,30 +66,10 @@ const app = Vue.createApp({
                   placeholder="_wiki"
                 />
                 <p class="text-xs mt-1" style="color: hsl(var(--muted-foreground))">Folder path in Drive, e.g. <code>_wiki</code> or <code>team/projects/wiki</code></p>
-              </div>
-            </div>
-            <div class="flex gap-2">
-              <button
-                v-if="wikiList.length > 0"
-                @click="showNewWikiDialog = false; showWikiSelector = true"
-                :disabled="creatingWiki"
-                class="flex-1 py-2 text-sm rounded-lg border hover:opacity-80 disabled:opacity-50 transition-colors"
-                style="border-color: hsl(var(--border)); background-color: hsl(var(--muted))"
-              >Back</button>
-              <button
-                @click="createWikiAndConnect()"
-                :disabled="creatingWiki || !newWikiName.trim() || !newWikiFolder.trim()"
-                class="flex-1 py-2 text-sm rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-colors text-white"
-                style="background-color: hsl(var(--primary))"
-              >
-                <div v-if="creatingWiki" class="spinner" style="width:1rem;height:1rem;border-width:1px;border-top-color:white"></div>
-                {{ creatingWiki ? 'Creating…' : 'Create Wiki' }}
-              </button>
-            </div>
-          </div>
-        </div>
+</div>
       </div>
-    </template>
+
+      </template>
 
     <template v-else>
       <app-header
@@ -128,6 +108,8 @@ const app = Vue.createApp({
         @asset-refresh="$refs.renderer?.triggerRefreshAssets()"
         @asset-upload="$refs.renderer?.triggerUpload()"
         @asset-create-subfolder="$refs.renderer?.triggerCreateSubfolder()"
+        :ai-enabled="aiEnabled"
+        @toggle-ai-chat="toggleAiChat"
       ></app-header>
       <div class="app-body">
         <sidebar
@@ -170,6 +152,18 @@ const app = Vue.createApp({
           </template>
         </main>
       </div>
+
+      <!-- AI Chat Panel -->
+      <ai-chat-panel
+        v-if="aiPanelOpen && aiChat"
+        :chat="aiChat"
+        :model="aiModel"
+        :page-context="currentPath"
+        @close="closeAiPanel"
+        @model-change="onAiModelChange"
+        @page-refresh="refreshPage"
+      ></ai-chat-panel>
+
       <!-- Toast -->
       <div v-if="toast" class="toast" :class="toast.type" @click="toast = null">{{ toast.message }}</div>
       <!-- New page dialog -->
@@ -373,9 +367,15 @@ const app = Vue.createApp({
         url: '',
         error: '',
       },
+      aiChat: null,
+      aiPanelOpen: false,
+      aiModel: 'gemini:gemini-2.0-flash',
     };
   },
   computed: {
+    aiEnabled() {
+      return typeof isAiConfigured === 'function' && isAiConfigured();
+    },
     renameMoveTitle() {
       const dt = this.document?.docType;
       if (dt === 'drawing') return 'Rename Drawing';
@@ -394,6 +394,14 @@ const app = Vue.createApp({
     const savedDarkMode = localStorage.getItem('darkMode') === 'true';
     this.darkMode = savedDarkMode;
     this.applyDarkMode(savedDarkMode);
+
+    // Restore AI model preference
+    const savedAiModel = localStorage.getItem('wiki:ai-model');
+    if (savedAiModel) {
+      this.aiModel = savedAiModel;
+    } else if (typeof getDefaultModel === 'function') {
+      this.aiModel = getDefaultModel();
+    }
 
     AuthManager.init((loggedIn) => {
       this.authenticated = loggedIn;
@@ -424,6 +432,9 @@ const app = Vue.createApp({
   unmounted() {
     window.removeEventListener('keydown', this._onKeyDown);
     window.removeEventListener('beforeunload', this._onBeforeUnload);
+    if (this.aiChat) {
+      this.aiChat.destroy();
+    }
   },
   methods: {
     async initApp() {
@@ -1126,6 +1137,55 @@ const app = Vue.createApp({
       setTimeout(() => { this.toast = null; }, 3000);
     },
 
+    async openAiPanel() {
+      console.log('openAiPanel called, aiChat:', !!this.aiChat, 'aiPanelOpen:', this.aiPanelOpen);
+      this.aiPanelOpen = true;
+      console.log('After setting true, aiPanelOpen:', this.aiPanelOpen);
+      if (!this.aiChat) {
+        try {
+          console.log('Creating AI chat...');
+          if (typeof window.fetchAiModels === 'function') {
+            await window.fetchAiModels();
+          }
+          if (this.aiModel && !(window.AI_MODELS ?? []).find(m => m.value === this.aiModel)) {
+            this.aiModel = window.AI_MODELS[0]?.value ?? this.aiModel;
+          }
+          this.aiModel = typeof getDefaultModel === 'function' ? getDefaultModel() : 'gemini-2.0-flash-lite';
+          const tools = typeof getWikiTools === 'function' ? await getWikiTools() : [];
+          this.aiChat = await createAiChat({
+            model: this.aiModel,
+            system: window.WIKI_ASSISTANT_SYSTEM || 'You are a helpful AI assistant.',
+            tools: tools,
+          });
+          console.log('AI chat created, aiChat:', !!this.aiChat, 'aiPanelOpen:', this.aiPanelOpen);
+          this.aiChat.chat.messages.subscribe(msgs => { this.aiMessages = msgs; });
+          this.aiChat.chat.isGenerating.subscribe(v => { this.aiGenerating = v; });
+        } catch (e) {
+          console.error('AI chat error:', e);
+          this.showToast('Failed to initialize AI chat: ' + e.message, 'error');
+          this.aiPanelOpen = false;
+        }
+      }
+    },
+
+    closeAiPanel() {
+      this.aiPanelOpen = false;
+    },
+
+    toggleAiChat() {
+      console.log('toggleAiChat, aiPanelOpen:', this.aiPanelOpen);
+      if (this.aiPanelOpen) {
+        this.closeAiPanel();
+      } else {
+        this.openAiPanel();
+      }
+    },
+
+    onAiModelChange(newModel) {
+      this.aiModel = newModel;
+      localStorage.setItem('wiki:ai-model', newModel);
+    },
+
     closeAnonymousShareDialog() {
       this.anonymousShareDialog.open = false;
       this.anonymousShareDialog.loading = false;
@@ -1197,6 +1257,7 @@ app.component('drawing-viewer', DrawingViewer);
 app.component('drawing-editor', DrawingEditor);
 app.component('asset-viewer', AssetViewer);
 app.component('folder-viewer', FolderViewer);
+app.component('ai-chat-panel', AiChatPanel);
 
 // Mount
 app.mount('#app');

@@ -6,7 +6,15 @@
       "Bash(find:*)",
       "Bash(wc:*)",
       "Bash(cd:*)",
-      "Bash(pnpm build:*)"
+      "Bash(pnpm build:*)",
+      "Bash(git stash *)",
+      "WebFetch(domain:esm.sh)",
+      "Bash(curl -sI https://esm.sh/@hashbrownai/core@0.5.0-beta.4)",
+      "WebFetch(domain:unpkg.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:cdn.jsdelivr.net)",
+      "WebFetch(domain:docs.hashbrown.ai)",
+      "WebFetch(domain:hashbrown.dev)"
     ]
   }
 }
