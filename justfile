@@ -32,3 +32,36 @@ run-all-dev:
     echo "Frontend on http://localhost:9595"
     echo ""
     mprocs --config _devops/mprocs.yaml
+
+deploy env="default":
+    #!/usr/bin/env bash
+    set -e
+    echo "Deploying to environment: {{env}}"
+
+    rm -rf __deploy
+    mkdir __deploy
+
+    # Copy worker files
+    cp -r worker/* __deploy/
+
+    # Copy frontend files to __deploy/public
+    mkdir -p __deploy/public
+    cp -r src/* __deploy/public/
+
+    # Create version.json
+    VERSION="manual-$(date +%Y%m%d-%H%M)"
+    BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+    BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    echo "{\"version\": \"$VERSION\", \"buildDate\": \"$BUILD_DATE\", \"branch\": \"$BRANCH\", \"actionId\": \"manual\"}" > __deploy/public/version.json
+
+    # Inject environment config
+    if [ -f "_devops/{{env}}/config.js" ]; then
+        cp "_devops/{{env}}/config.js" __deploy/public/config.js
+    else
+        echo "Warning: _devops/{{env}}/config.js not found"
+    fi
+
+    # Install and deploy
+    cd __deploy
+    npm install
+    npx wrangler deploy
