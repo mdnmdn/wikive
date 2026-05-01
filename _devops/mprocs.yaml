@@ -1,0 +1,13 @@
+# log_path: "<CONFIG_DIR>/../_data/mprocs.logs"
+procs:
+  worker:
+    shell: "just worker-dev"
+    cwd: "<CONFIG_DIR>/.."
+    autostart: true
+    stop: "SIGINT"
+
+  frontend:
+    shell: "just serve"
+    cwd: "<CONFIG_DIR>/.."
+    autostart: true
+    stop: "SIGINT"

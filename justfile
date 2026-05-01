@@ -15,3 +15,20 @@ excalidraw-sync: excalidraw-build
     # Copy the webcomponent bundle into js
     cp components/excalidraw-webcomponent/dist/excalidraw-wc.umd.js src/js/
 
+
+worker-dev:
+    cd worker && pnpm run dev
+
+run-all-dev:
+    #!/usr/bin/env bash
+    just compose-up
+    if ! command -v mprocs &> /dev/null; then
+        echo "Error: mprocs is not installed"
+        echo "Install it with: brew install mprocs (or npm install -g mprocs)"
+        exit 1
+    fi
+    echo "Starting all development servers with mprocs..."
+    echo "Worker on http://localhost:8787"
+    echo "Frontend on http://localhost:9595"
+    echo ""
+    mprocs --config _devops/mprocs.yaml
