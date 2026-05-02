@@ -178,16 +178,31 @@ IndexedDB (via postMessage), passing `?path=notebook.ipynb` will open it directl
 
 ## Service worker requirements
 
-JupyterLite registers a service worker (`service-worker.js`) that intercepts fetch requests to serve
-kernel WASM bundles and cached assets. This has two implications:
+JupyterLite registers a service worker (`service-worker.js`) that bridges the gap between the
+synchronous filesystem calls that WASM kernels make and the browser's async storage (IndexedDB).
+The mechanism:
+
+1. The WASM kernel posts a file request to `/api/drive` (HTTP).
+2. The SW intercepts it and forwards the request to the main thread via `BroadcastChannel(/sw-api.v1)`.
+3. The main thread resolves the file from the contents manager and replies on the channel.
+4. The SW returns the response to the kernel.
+
+**Alternative — SharedArrayBuffer**: If the JupyterLite server sends `Cross-Origin-Opener-Policy: same-origin`
+and `Cross-Origin-Embedder-Policy: require-corp` headers, JupyterLite uses `SharedArrayBuffer` instead of
+the SW for synchronization. This is faster but requires header control over the server. On GitHub Pages
+you can use the `coi-serviceworker` trick to inject these headers via a small SW at build time.
+
+**Practical implications:**
 
 1. **Same-origin requirement**: The service worker must be registered from the same origin as the iframe.
    When the wikive app is served at `https://wiki.example.com`, the JupyterLite bundle must also be served
-   from `https://wiki.example.com/jupyterlite/`. Hosting it on a separate CDN or subdomain breaks the
-   service worker unless you use `ServiceWorker.scope` carefully.
+   from `https://wiki.example.com/jupyterlite/`.
 
-2. **HTTPS required**: Service workers only work over HTTPS (or `localhost`). Plain HTTP hosting will fall
-   back to Pyodide fetching without the SW cache, which is slow.
+2. **HTTPS required**: Service workers only work over HTTPS (or `localhost`). Plain HTTP falls back to no
+   SW which breaks kernel file access.
+
+3. **Firefox private windows**: Service workers are blocked. JupyterLite kernel file access will fail in
+   Firefox private mode.
 
 See the [cross-origin section](#cross-origin-and-multi-domain-embedding) for mitigations.
 
@@ -206,14 +221,13 @@ Example: wikive at `https://wiki.example.com`, JupyterLite at `https://jlite.exa
 
 Problems:
 - Service worker on `jlite.example.com` cannot intercept requests from `wiki.example.com`.
-- `postMessage` works cross-origin but requires `targetOrigin` to be set correctly on both sides.
-- CORS headers must be set on `jlite.example.com` to allow the parent page to reach JupyterLite assets.
+- `postMessage` works cross-origin but requires explicit `targetOrigin` on both sides.
+- CORS headers must be set on `jlite.example.com` for asset fetches.
 
 Mitigations:
-- Use `?iframe=1` query param in JupyterLite URLs so the lab disables its own service worker registration
-  when embedded (feature available in newer JupyterLite versions).
-- Pre-warm the service worker by navigating the user to the JupyterLite origin first (impractical UX).
 - Serve JupyterLite as a sub-path of the same Cloudflare Workers/Pages deployment to keep origins aligned.
+- Use `SharedArrayBuffer` mode (COOP/COEP headers on the JupyterLite host) to eliminate the SW dependency.
+- Use `jupyter-iframe-commands` (see below) which uses Comlink and works cross-origin.
 
 ### Scenario C — JupyterLite on a public CDN (lite.jupyter.org, mybinder.org)
 
@@ -223,6 +237,12 @@ embed these in an iframe but:
 - The user's kernel state is isolated in the remote origin.
 - Useful only for read-only / demo notebooks.
 
+### Scenario C — Public JupyterLite deployment (read-only)
+
+JupyterLite is available at `https://jupyterlite.github.io/demo/` and similar public deployments.
+Embed in an iframe for demonstrations, but no file sync is possible. Use only for read-only / demo notebooks.
+Load notebooks via the `?fromURL=` parameter (requires `jupyterlab-open-url-parameter` extension).
+
 ### Recommended approach for wikive
 
 Keep the JupyterLite bundle on the **same origin** as the wiki (`/jupyterlite/` sub-path). When deploying
@@ -230,6 +250,38 @@ to Cloudflare Pages or Workers, this is achieved automatically because both the 
 JupyterLite assets are served from the same `*.pages.dev` domain.
 
 For custom domains, ensure both the wiki and `public/jupyterlite/**` resolve from the same domain.
+
+### `jupyter-iframe-commands` — structured postMessage bridge
+
+[`jupyter-iframe-commands`](https://github.com/TileDB-Inc/jupyter-iframe-commands) is a production-ready
+TileDB-maintained extension that provides a Comlink-based command bridge between a host page and an
+embedded JupyterLite iframe. Install it into the bundle at build time:
+
+```bash
+pip install jupyter-iframe-commands
+jupyter lite build --output-dir public/jupyterlite
+```
+
+Host page usage (npm package `jupyter-iframe-commands-host`):
+
+```js
+import { createBridge } from 'jupyter-iframe-commands-host';
+
+const bridge = createBridge({ iframeId: 'my-jupyter-iframe' });
+await bridge.ready;
+
+// Execute any registered JupyterLab command:
+await bridge.execute('apputils:change-theme', { theme: 'JupyterLab Dark' });
+await bridge.execute('filebrowser:open-path', { path: 'my-notebook.ipynb' });
+
+// List all available commands:
+const commands = await bridge.listCommands();
+```
+
+This is the most robust mechanism for host↔iframe communication. It works cross-origin as long as the
+`targetOrigin` is configured correctly.
+
+> **Deep dive**: https://github.com/TileDB-Inc/jupyter-iframe-commands
 
 ---
 
@@ -256,6 +308,23 @@ For custom domains, ensure both the wiki and `public/jupyterlite/**` resolve fro
 
 ---
 
+## Known limitations
+
+1. **No runtime extension install**: Extensions must be bundled at build time. The Extension Manager GUI
+   does not work in JupyterLite as it does in server-based JupyterLab.
+2. **Kernel threading**: Python code using `threading`, `subprocess`, socket networking, or blocking I/O
+   may not work under Pyodide. xeus-python has better `time.sleep` support.
+3. **piplite ≠ pip**: Only pure-Python or pre-compiled WASM wheels can be installed at runtime.
+4. **Firefox private windows**: Service workers are blocked; kernel file access fails.
+5. **Custom drive + kernel access**: Registering a custom `IDrive` in the UI layer does NOT automatically
+   make files accessible from inside the Python kernel (e.g., `open('/drive/file.csv')`). The
+   `DriveContentsProcessor` / Service Worker pathway must also be wired up.
+6. **Storage isolation**: JupyterLite's IndexedDB is namespaced by origin. Two deployments on different
+   origins see different file systems. Configure `contentsStorageName` if hosting multiple instances on
+   the same origin.
+
+---
+
 ## References
 
 | Resource | URL |
@@ -263,11 +332,22 @@ For custom domains, ensure both the wiki and `public/jupyterlite/**` resolve fro
 | JupyterLite docs | https://jupyterlite.readthedocs.io/en/stable/ |
 | JupyterLite GitHub | https://github.com/jupyterlite/jupyterlite |
 | JupyterLite demo | https://jupyterlite.github.io/demo/ |
+| IFrame communication (official docs) | https://jupyterlite.readthedocs.io/en/stable/howto/configure/advanced/iframe.html |
+| Embed REPL (quickstart) | https://jupyterlite.readthedocs.io/en/stable/quickstart/embed-repl.html |
+| Config files reference | https://jupyterlite.readthedocs.io/en/stable/howto/configure/config_files.html |
+| Full schema reference | https://jupyterlite.readthedocs.io/en/stable/reference/schema-v0.html |
+| Contents API reference | https://jupyterlite.readthedocs.io/en/stable/reference/contents.html |
+| Browser storage config | https://jupyterlite.readthedocs.io/en/stable/howto/configure/storage.html |
+| Migration guide | https://jupyterlite.readthedocs.io/en/stable/migration.html |
+| Open from URL (`?fromURL=`) | https://jupyterlite.readthedocs.io/en/stable/howto/content/open-url-parameter.html |
+| jupyter-iframe-commands | https://github.com/TileDB-Inc/jupyter-iframe-commands |
 | JupyterLab extensions | https://jupyterlab.readthedocs.io/en/stable/user/extensions.html |
 | Webpack module federation | https://webpack.js.org/concepts/module-federation/ |
 | Pyodide (Python WASM) | https://pyodide.org/en/stable/ |
-| xeus kernels | https://github.com/jupyter-xeus |
+| xeus kernels (unified) | https://github.com/jupyterlite/xeus |
+| xeus-lite docs | https://jupyterlite-xeus.readthedocs.io/ |
 | nbformat spec | https://nbformat.readthedocs.io/en/latest/ |
-| JupyterLite Contents API (source) | https://github.com/jupyterlite/jupyterlite/tree/main/packages/contents |
-| jupyter-ai extension | https://github.com/jupyterlab/jupyter-ai |
-| JupyterLite service worker | https://github.com/jupyterlite/jupyterlite/blob/main/packages/server-extension/src/service-worker.ts |
+| JupyterLite Contents package | https://github.com/jupyterlite/jupyterlite/tree/main/packages/contents |
+| jupyterlite-ai (browser AI) | https://github.com/jupyterlite/ai |
+| jupyterlab-google-drive JupyterLite issue | https://github.com/jupyterlab/jupyterlab-google-drive/issues/203 |
+| JupyterLite service worker source | https://github.com/jupyterlite/jupyterlite/blob/main/packages/server-extension/src/service-worker.ts |

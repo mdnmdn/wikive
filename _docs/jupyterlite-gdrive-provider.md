@@ -45,6 +45,31 @@ wikive app and the JupyterLite iframe.
 └─────────────────────────────────────────────────────────┘
 ```
 
+### Alternative: use `jupyter-iframe-commands` instead of raw postMessage
+
+[`jupyter-iframe-commands`](https://github.com/TileDB-Inc/jupyter-iframe-commands) is a TileDB-maintained
+extension that provides a Comlink-based structured command bridge. It is more robust than raw `postMessage`
+and works cross-origin. Install it into the JupyterLite bundle at build time:
+
+```bash
+pip install jupyter-iframe-commands
+jupyter lite build --output-dir public/jupyterlite
+```
+
+Host page:
+```js
+import { createBridge } from 'jupyter-iframe-commands-host';
+
+const bridge = createBridge({ iframeId: 'notebook-frame' });
+await bridge.ready;
+
+// Open a specific file already written to the virtual FS:
+await bridge.execute('filebrowser:open-path', { path: 'my-notebook.ipynb' });
+```
+
+The raw `postMessage` approach described below works without any build step and is suitable as a first
+implementation. Migrate to `jupyter-iframe-commands` once the build pipeline is set up.
+
 ### Step 1 — inject `bridge.js` into the JupyterLite HTML
 
 Add a `<script src="../../bridge.js">` (or inline it) inside `public/jupyterlite/lab/index.html` just
@@ -617,6 +642,38 @@ doc.id (string)    doc.name + '.ipynb'  (e.g. "My Analysis.ipynb")
 
 When JupyterLite refers to a file by name, the parent must reverse-lookup the Drive ID using
 `StorageService.resolvePath('_notebooks/' + name)`.
+
+### Kernel-level file access (critical limitation)
+
+The postMessage bridge (Approach A) and the custom `IDrive` extension (Approach B) both operate at the
+**JupyterLab UI layer** — the file browser sidebar, notebook open/save. They do NOT make Drive files
+accessible to the Python kernel via the standard filesystem (e.g., `open('/drive/file.csv', 'r')`).
+
+The kernel uses the Emscripten filesystem (`DriveFS`), a separate subsystem that communicates with the
+main thread via the Service Worker `BroadcastChannel(/sw-api.v1)`. To expose Drive files inside the
+kernel, you must also implement a `DriveContentsProcessor` and wire it into the service worker pipeline.
+
+**Workaround**: Download the file inside the kernel using the Drive API directly:
+
+```python
+import piplite
+await piplite.install(['httpx'])
+import httpx
+
+# Parent page must postMessage the OAuth token to the kernel via a notebook variable
+token = "YOUR_OAUTH_TOKEN"  # injected via bridge
+file_id = "DRIVE_FILE_ID"
+
+r = httpx.get(
+    f"https://www.googleapis.com/drive/v3/files/{file_id}",
+    params={"alt": "media"},
+    headers={"Authorization": f"Bearer {token}"}
+)
+import io, pandas as pd
+df = pd.read_csv(io.StringIO(r.text))
+```
+
+> **Deep dive**: https://github.com/jupyterlite/jupyterlite/issues/1041
 
 ### Conflict resolution
 

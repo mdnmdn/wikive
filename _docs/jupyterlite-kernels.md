@@ -40,20 +40,20 @@ service worker cache.
 
 | Property | Value |
 |----------|-------|
-| Package | `@jupyterlite/xeus-python-kernel` / `jupyterlite-xeus` |
+| Package | `jupyterlite-xeus` (unified package — `jupyterlite-xeus-python` is **deprecated**) |
 | Kernel name (id) | `xpython` |
 | Display name | `Python (xeus-python)` |
 | Engine | xeus (C++ Jupyter protocol impl) + Emscripten Python |
 | Bundle size | ~4–6 MB |
-| Package manager | `%pip` magic / conda-forge packages compiled with Emscripten |
+| Package manager | `%pip` magic / conda-forge packages compiled with Emscripten toolchain |
 | Status in wikive | Not installed |
 
-xeus-python starts faster than Pyodide and supports the full `ipywidgets` ecosystem.
-The trade-off is a smaller set of pre-available packages (only packages compiled with Emscripten's
-toolchain are usable without a server).
+xeus-python starts faster than Pyodide and supports `time.sleep` (blocked in Pyodide). The trade-off is
+fewer dynamically installable packages — only packages compiled with Emscripten's toolchain are available.
+Pre-install packages via `environment.yml` at build time.
 
-> **Deep dive**: https://github.com/jupyter-xeus/xeus-python  
-> **xeus-lite for JupyterLite**: https://github.com/jupyter-xeus/xeus-lite
+> **Deep dive**: https://github.com/jupyterlite/xeus  
+> **xeus-lite docs**: https://jupyterlite-xeus.readthedocs.io/
 
 ### 3. TypeScript kernel — `typescript`
 
@@ -80,23 +80,33 @@ quick JS prototyping.
 
 | Property | Value |
 |----------|-------|
-| Package | `jupyterlite-xeus` with Lua kernel |
-| Engine | Lua compiled to WASM |
+| Package | `jupyterlite-xeus` (configure via `environment.yml` with `xeus-lua`) |
+| Engine | Lua compiled to WASM via Emscripten |
 | Status | Experimental |
 
-> **Deep dive**: https://github.com/jupyter-xeus/xeus-lua
+> **Deep dive**: https://github.com/jupyterlite/xeus
 
 ### 6. xeus-sql — `xsql`
 
-SQL notebook interface using an in-memory SQLite database compiled to WASM.
+SQL notebook interface using an in-memory SQLite database compiled to WASM. Configure via
+`jupyterlite-xeus` with `xeus-sqlite` in `environment.yml`.
 
-> **Deep dive**: https://github.com/jupyter-xeus/xeus-sql
+> **Deep dive**: https://github.com/jupyterlite/xeus
 
-### 7. R kernel — `ir` (experimental)
+### 7. xeus-cpp — `xcpp`
+
+C++ kernel using Clang/LLVM compiled to WASM. Configure via `jupyterlite-xeus` with `xeus-cpp` in
+`environment.yml`. Useful for systems programming demonstrations.
+
+### 8. R kernel — `ir` (experimental)
 
 WebR provides R in the browser. JupyterLite R kernels are experimental but available.
 
 > **Deep dive**: https://webr.r-wasm.org/, https://github.com/georgestagg/jupyterlite-webr-kernel
+
+> **Note**: All xeus-based kernels use the unified `jupyterlite-xeus` Python package. The old individual
+> packages (`jupyterlite-xeus-python`, `jupyterlite-xeus-lua`) are **deprecated**. Configure which
+> kernels to include via `environment.yml` placed in the build directory root.
 
 ---
 
@@ -167,8 +177,18 @@ Steps:
 ### Method B — use `jupyter lite build` once and commit the output
 
 ```bash
-# One-time setup
-pip install jupyterlite-core jupyterlite-pyodide-kernel jupyterlite-xeus-python
+# One-time setup (use jupyterlite-xeus, NOT the deprecated jupyterlite-xeus-python)
+pip install jupyterlite-core jupyterlite-pyodide-kernel jupyterlite-xeus
+
+# Configure xeus kernels via environment.yml in the build root:
+# environment.yml:
+#   name: xeus-environment
+#   channels:
+#     - https://repo.mamba.pm/emscripten-forge
+#     - conda-forge
+#   dependencies:
+#     - xeus-python
+#     - xeus-lua
 
 # Build the bundle
 jupyter lite build \
