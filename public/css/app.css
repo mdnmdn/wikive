@@ -733,6 +733,59 @@ button { cursor: pointer; }
   opacity: 0.85;
 }
 
+/* ── AI Document Context ───────────────────────────────────────────────── */
+.ai-doc-context-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.72rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background-color: hsl(var(--muted) / 0.5);
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.ai-doc-context-type {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.65rem;
+  background-color: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+  padding: 0.1em 0.4em;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.ai-doc-context-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-context-note {
+  font-size: 0.78rem;
+  color: hsl(var(--muted-foreground));
+  background-color: hsl(var(--muted) / 0.4);
+  border-left: 2px solid hsl(var(--primary) / 0.4);
+  padding: 0.35rem 0.6rem;
+  border-radius: 0 4px 4px 0;
+  margin: 0.25rem 0;
+  line-height: 1.4;
+}
+
+.ai-context-note p {
+  margin: 0;
+}
+
+.ai-context-note code {
+  font-size: 0.75rem;
+  background-color: hsl(var(--muted));
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+
 /* ── AI Settings Panel ─────────────────────────────────────────────────── */
 .ai-settings-panel {
   display: flex;
@@ -920,4 +973,74 @@ button { cursor: pointer; }
   align-items: flex-start;
   gap: 4px;
   line-height: 1.4;
+}
+
+.ai-settings-section {
+  padding: 0.65rem 0.75rem 0.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.ai-settings-section-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: hsl(var(--muted-foreground));
+  padding: 0.5rem 0.75rem 0.3rem;
+}
+
+.ai-settings-section-desc {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  margin: 0 0 0.5rem;
+  line-height: 1.4;
+}
+
+.ai-settings-action-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ai-settings-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 5px;
+  border: 1px solid hsl(var(--border));
+  background-color: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.ai-settings-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ai-settings-action-btn:hover:not(:disabled) {
+  opacity: 0.8;
+}
+
+.ai-action-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-action-status--ok {
+  color: hsl(142 71% 35%);
+}
+
+.ai-action-status--error {
+  color: hsl(var(--destructive));
 }
