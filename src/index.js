@@ -143,9 +143,8 @@ async function verifyGoogleToken(token, expectedClientId) {
   }
 }
 
-// Shared auth helper: validates token and resolves email.
-// Returns { claims, email } on success, or calls the reject handler.
-async function authenticateRequest(request, env) {
+// Verifies the Google token and resolves email; does NOT check AUTHORIZED_EMAILS.
+async function verifyRequestToken(request, env) {
   const authHeader = request.headers.get('Authorization') ?? '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
   if (!token) return { error: json({ error: 'Authorization header required' }, 401) };
@@ -161,11 +160,19 @@ async function authenticateRequest(request, env) {
     if (userInfo.ok) email = (await userInfo.json()).email;
   }
 
-  if (!isEmailAuthorized(email, env.AUTHORIZED_EMAILS)) {
+  return { claims, email, token };
+}
+
+// Full auth: token verification + AUTHORIZED_EMAILS check (used for /encrypt and backend-provider chat).
+async function authenticateRequest(request, env) {
+  const auth = await verifyRequestToken(request, env);
+  if (auth.error) return auth;
+
+  if (!isEmailAuthorized(auth.email, env.AUTHORIZED_EMAILS)) {
     return { error: json({ error: 'Access denied' }, 403) };
   }
 
-  return { claims, email, token };
+  return auth;
 }
 
 function json(data, status = 200) {
@@ -271,7 +278,8 @@ async function handleChat(request, env) {
     return new Response(null, { headers: corsHeaders(request) });
   }
 
-  const auth = await authenticateRequest(request, env);
+  // Verify token for all requests
+  const auth = await verifyRequestToken(request, env);
   if (auth.error) return auth.error;
 
   // Extract custom provider headers
@@ -280,6 +288,14 @@ async function handleChat(request, env) {
   const providerUrl  = request.headers.get('X-Provider-URL')  || '';
   const isEncrypted  = request.headers.get('X-Provider-Encrypted') === 'true';
   const encClientKey = request.headers.get('X-Provider-Enc-Key') || '';
+
+  const hasCustomProvider = !!(providerType && providerKey);
+
+  // AUTHORIZED_EMAILS only restricts access to the backend-configured provider/models.
+  // Users who supply their own X-Provider-* credentials bypass this gate.
+  if (!hasCustomProvider && !isEmailAuthorized(auth.email, env.AUTHORIZED_EMAILS)) {
+    return json({ error: 'Access denied' }, 403);
+  }
 
   let resolvedApiKey = providerKey;
   if (isEncrypted && providerKey && encClientKey) {

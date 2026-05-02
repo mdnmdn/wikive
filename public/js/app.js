@@ -445,6 +445,14 @@ const app = Vue.createApp({
         this.wikiList = [];
         this.showWikiSelector = false;
         this.showNewWikiDialog = false;
+        this.aiProviders = [];
+        this.encryptionKey = null;
+        if (this.aiChat) {
+          this.aiChat.destroy?.();
+          this.aiChat = null;
+        }
+        this.aiPanelOpen = false;
+        if (typeof getDefaultModel === 'function') this.aiModel = getDefaultModel();
       }
     });
 
@@ -474,6 +482,14 @@ const app = Vue.createApp({
       this.wikiReady = false;
       this.document = null;
       this.fileContent = '';
+      this.aiProviders = [];
+      this.encryptionKey = null;
+      if (this.aiChat) {
+        this.aiChat.destroy?.();
+        this.aiChat = null;
+      }
+      this.aiPanelOpen = false;
+      if (typeof getDefaultModel === 'function') this.aiModel = getDefaultModel();
 
       // Namespace cache per authenticated user so accounts don't share entries
       CacheService.setUser(this.user.email);
@@ -608,7 +624,8 @@ const app = Vue.createApp({
       if (wiki.wikiName === this.currentWikiName) return;
       this.currentWikiName = wiki.wikiName;
       localStorage.setItem('wiki_last:' + this.user.email, wiki.wikiName);
-      window.location.hash = '#/';
+      // Use replaceState to reset to home without firing a hashchange before the wiki is connected
+      history.replaceState(null, '', '#/');
       await this._connectToWiki(wiki.rootFolder);
       this.refreshSidebar();
     },

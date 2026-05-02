@@ -17,7 +17,7 @@ window.createAiChat = async function({ system, tools = [], model, provider = nul
   const { fryHashbrown, createHttpTransport } = await getHashbrown();
 
   if (chatInstance) {
-    chatInstance.destroy();
+    chatInstance.cleanup();
   }
 
   const config = typeof CONFIG !== 'undefined' ? CONFIG : window.CONFIG;

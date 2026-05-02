@@ -30,6 +30,7 @@ const CONFIG = {
   // Default AI model
   AI_MODEL: "gemini-flash-lite-latest",
 
-  AI_URL: "http://localhost:8788"
+  AI_URL: ""
+  // AI_URL: "http://localhost:8788"
   // AI_URL: "https://wiki-realtime.mdn.workers.dev"
 };
