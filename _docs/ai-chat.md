@@ -46,11 +46,11 @@ fryHashbrown({ model: 'gemini:…' })      POST /api/chat
 | File | Role |
 |------|------|
 | `src/js/services/ai-chat.js` | `createAiChat()` — wraps `fryHashbrown`, attaches auth + optional provider middlewares, exposes `updateModel` |
-| `src/js/services/ai-tools.js` | `getWikiTools()` — four tools the LLM can call: `readPage`, `writePage`, `listPages`, `deletePage` |
-| `src/js/services/ai-prompt.js` | `WIKI_ASSISTANT_SYSTEM` — system prompt constant, injects the wiki root folder name |
-| `src/js/components/AiChatPanel.js` | Vue component — fixed slide-in panel, model selector, gear toggle to open settings, message list, tool-call badges, input bar |
+| `src/js/services/ai-tools.js` | `getWikiTools()` — seven tools the LLM can call: `getCurrentDocument`, `getCurrentContent`, `updateCurrentDocument`, `readPage`, `writePage`, `listPages`, `deletePage` |
+| `src/js/services/ai-prompt.js` | `WIKI_ASSISTANT_SYSTEM` — system prompt constant, injects the wiki root folder name and documents context-aware tools |
+| `src/js/components/AiChatPanel.js` | Vue component — fixed slide-in panel, document context chip, model selector, gear toggle to open settings, message list with context notes, tool-call badges, input bar |
 | `src/js/components/AiSettingsPanel.js` | Vue component — embedded settings view for managing AI provider configurations (add / edit / delete) |
-| `src/js/app.js` | Mounts `AiChatPanel`, owns `aiChat`/`aiPanelOpen`/`aiModel`/`aiProviders` state, lazy-initialises the chat instance, persists providers to Drive |
+| `src/js/app.js` | Mounts `AiChatPanel`, owns `aiChat`/`aiPanelOpen`/`aiModel`/`aiProviders`/`documentContext` state, maintains `window._currentDocContext`, lazy-initialises the chat instance, persists providers to Drive |
 | `src/js/components/AppHeader.js` | Renders the AI toggle button when `aiEnabled` is true, emits `toggle-ai-chat` |
 | `src/js/providers/GoogleDriveProvider.js` | Persists `wiki_definitions.json` in `{ wikis, aiProviders }` format; back-compat with old plain-array format |
 | `src/config.js` | `AI_URL` (required to enable AI), `AI_MODEL` (default model when no providers configured) |
@@ -179,17 +179,29 @@ The client's `fryHashbrown` instance decodes frames and updates its reactive sig
 `getWikiTools()` returns an array of tool objects:
 
 ```
-{ name, description, handler(args, signal) }
+{ name, description, label(args), schema, handler(args, signal) }
 ```
 
-All handlers delegate to `StorageService`.
+All handlers delegate to `StorageService` or `window._currentDocContext`.
+
+### Context-aware tools (currently open document)
+
+These tools operate on whatever page or snippet is currently visible in the app, without requiring the user to specify a path. They read from `window._currentDocContext` which `app.js` keeps in sync.
 
 | Tool | Description | Key behaviour |
 |------|-------------|---------------|
-| `readPage` | Read markdown content of a page | Resolves path, fetches via `StorageService.getFileContent` |
-| `writePage` | Create or overwrite a page | Resolves path: updates if exists, creates otherwise (appends `.md`) |
+| `getCurrentDocument` | Get metadata of the open document | Returns `{ name, path, docType }` or `{ document: null }` |
+| `getCurrentContent` | Read content of the open document | Reads `window._currentDocContext.content`; fails if type is not `markdown` or `snippet` |
+| `updateCurrentDocument` | Save new content to the open document | Calls `StorageService.updateFile`, updates `window._currentDocContext.content`, invokes `window._refreshCurrentDoc()` |
+
+### Path-based tools
+
+| Tool | Description | Key behaviour |
+|------|-------------|---------------|
+| `readPage` | Read markdown content of a page by path | Resolves path, fetches via `StorageService.getFileContent` |
+| `writePage` | Create or overwrite a page by path | Resolves path: updates if exists, creates otherwise (appends `.md`) |
 | `listPages` | List all wiki pages, optional prefix filter | Lists root folder, filters to `.md` files, strips extension |
-| `deletePage` | Delete a page | Resolves path, calls `StorageService.deleteFile` |
+| `deletePage` | Delete a page by path | Resolves path, calls `StorageService.deleteFile` |
 
 Hashbrown wraps each handler result as `PromiseSettledResult<T>`:
 - `{ status: 'fulfilled', value: … }` on success
@@ -201,9 +213,9 @@ Hashbrown wraps each handler result as `PromiseSettledResult<T>`:
 
 `WIKI_ASSISTANT_SYSTEM` is injected at chat creation time. It describes:
 - The wiki context (Google Drive backed personal wiki).
-- Available tools and their intent.
+- All available tools and their intent, including the three context-aware tools.
 - Editorial rules: preserve structure, clean Markdown, no invented content.
-- Requirement to confirm before `writePage` or `deletePage`.
+- Requirement to confirm before `writePage`, `deletePage`, or `updateCurrentDocument`.
 - The current wiki root folder name (from `CONFIG.ROOT_FOLDER_NAME`).
 
 ---
@@ -218,7 +230,8 @@ A fixed-position panel that slides in from the right edge of the viewport.
 |------|------|-------------|
 | `chat` | Object | The object returned by `createAiChat`: `{ chat, destroy, updateModel }` |
 | `model` | String | Currently selected model value (may be `provideId::modelName`) |
-| `pageContext` | String | Current wiki path — reserved for context injection |
+| `pageContext` | String | Current wiki path (legacy, kept for compatibility) |
+| `documentContext` | Object\|null | `{ name, path, docType }` for the currently open document; `null` if no supported document is open |
 | `aiProviders` | Array | Configured provider objects passed down from `app.js` |
 | `providersSaving` | Boolean | True while the parent is persisting provider changes to Drive |
 
@@ -237,6 +250,25 @@ A gear icon button in the panel header switches between the chat view and the em
 `<ai-settings-panel>` component. The panel header remains visible in both views; the model
 selector is hidden while settings are open.
 
+### Document context chip
+
+When `documentContext` is non-null a compact chip is rendered between the panel header and the message list showing the document type badge and name:
+
+```
+[Page] home
+[Snippet] snip-250502-14-30.js
+```
+
+This updates reactively whenever the user navigates to a different page while the panel is open.
+
+### Context note injection
+
+On panel `mounted` (if `documentContext` is set) and whenever `documentContext` changes to a different `docType:path` combination, the component appends a `{ role: 'doc-context', … }` message to the chat history via `chat.chat.setMessages([...messages, note])`. This message is rendered as a styled note in the message list:
+
+> 📄 Now viewing: **home** (markdown) — Use `getCurrentContent` to read it or `updateCurrentDocument` to modify it.
+
+Context notes are only re-injected when the path or type actually differs from the last injected context (tracked via `_lastContextKey`). Re-opening the panel on the same document does not add a duplicate note.
+
 ### State signals subscribed in `mounted`
 
 | Signal | Vue data | Use |
@@ -246,11 +278,15 @@ selector is hidden while settings are open.
 | `chat.isRunningToolCalls` | `isRunningToolCalls` | Differentiates "thinking" from "tool running" |
 | `chat.error` | `error` | Shows error bar with retry button |
 
+### Watchers
+
+**`documentContext`** — fires when the prop changes; computes a `docType:path` key and calls `_injectContextNote` only if the key differs from `_lastContextKey`.
+
 ### Computed properties
 
 **`effectiveModels`** — when providers are configured, builds model options from them; otherwise returns `window.AI_MODELS` from the backend.
 
-**`visibleMessages`** — filters to `user` and `assistant` roles only.
+**`visibleMessages`** — filters to `user`, `assistant`, and `doc-context` roles.
 
 **`toolCallStatuses`** — pairs `toolCalls` entries from the last assistant message with their `tool` result messages to produce per-call `running` / `done` / `error` status.
 
@@ -281,6 +317,9 @@ messages = [
 | `onModelChange` | Emits `model-change` (parent destroys and recreates chat) |
 | `onProvidersSave` | Forwards `AiSettingsPanel`'s `save` event as `providers-change` |
 | `renderContent` | Renders via `marked.parse()` if available |
+| `_contextKey(ctx)` | Returns `"docType:path"` string from a context object, used for change detection |
+| `_injectContextNote(ctx)` | Appends a `doc-context` message to the message history via `setMessages` |
+| `docTypeLabel(docType)` | Maps `markdown` → `Page`, `snippet` → `Snippet`, etc. for the context chip |
 
 ### Input behaviour
 
@@ -347,11 +386,22 @@ On **Delete**, confirmation is requested via `confirm()` before the provider is 
 
 `aiEnabled` — `true` when `isAiConfigured()` is truthy (`CONFIG.AI_URL` is set).
 
+`documentContext` — returns `{ name, path, docType }` when the currently loaded document is a `markdown` or `snippet` type; `null` otherwise. Passed as `:document-context` to `<ai-chat-panel>`.
+
 ### Lifecycle
 
 - **`mounted`** — restores `aiModel` from `localStorage`.
 - **`initApp`** — destructures `{ wikis, aiProviders }` from `StorageService.getWikiDefinitions()` and assigns both.
 - **`beforeUnmount`** — calls `this.aiChat?.destroy()`.
+
+### `_setupDocContext()`
+
+Called at the end of every `onRouteChange()` and keeps two globals in sync:
+
+- **`window._currentDocContext`** — `{ name, path, docType, documentId, content }` for the open document if it is `markdown` or `snippet`; `null` otherwise. Tool handlers read from this object.
+- **`window._refreshCurrentDoc`** — a callback that clears the content cache entry and calls `onRouteChange()`. Invoked by `updateCurrentDocument` after a successful write so the rendered page reflects the new content.
+
+`fileContent` is also patched into `window._currentDocContext.content` inside the `save()` method so the context stays accurate after a manual save without a full route reload.
 
 ### `openAiPanel`
 
@@ -435,6 +485,12 @@ Classes in `css/app.css`:
 - `.ai-tool-badge--running/done/error` — amber / green / red status badges.
 - `.ai-typing` — three-dot bounce animation.
 
+**Document context** (`/* ── AI Document Context */`)
+- `.ai-doc-context-chip` — narrow strip between the header and message list; shows the type badge and document name.
+- `.ai-doc-context-type` — uppercase pill badge (e.g. `PAGE`, `SNIPPET`) in primary-colour tint.
+- `.ai-doc-context-name` — truncated document name with `text-overflow: ellipsis`.
+- `.ai-context-note` — in-message context note; left-border accent, muted background, small font. Rendered for `role: 'doc-context'` messages.
+
 **Settings panel** (`/* ── AI Settings Panel */`)
 - `.ai-settings-panel` — `flex: 1; overflow: hidden` inside `.ai-panel`.
 - `.ai-settings-item` — bordered card row for each provider in the list.
@@ -457,6 +513,11 @@ All colours use `hsl(var(--*))` tokens; dark mode is handled automatically.
 | Model changed | Old chat instance destroyed, new one created with correct provider headers |
 | Provider added / edited | `onProvidersChange` → Drive save → `window.AI_MODELS` rebuilt |
 | Provider deleted | Same as above; if active model belonged to deleted provider, next open picks first available |
+| Panel opened on a markdown/snippet page | Context chip shows document name; a context note is injected into the message list |
+| User navigates to a different page while panel is open | `documentContext` computed updates; panel injects a new context note only if path or type changed |
+| Panel opened on a folder, drawing, asset, or notebook | `documentContext` is `null`; no chip or context note shown |
+| AI calls `getCurrentContent` / `updateCurrentDocument` | Reads from / writes to `window._currentDocContext`; update triggers `_refreshCurrentDoc()` |
+| Manual save (Cmd+S / Save button) | `fileContent` and `window._currentDocContext.content` both updated |
 | Tool call in progress | Badge shows `⏳ <label>` |
 | Tool call succeeds | Badge updates to `✓ <label>` |
 | Tool call throws | Badge updates to `✗ <label> <error>` |
