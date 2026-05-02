@@ -110,6 +110,84 @@ window.AI_MODELS = [
   { label: 'Gemini Flash Lite', value: 'gemini:gemini-flash-lite-latest' }
 ];
 
+// Returns the current Google OAuth token from AuthService or sessionStorage.
+window.getAiAuthToken = async function() {
+  let token = typeof AuthService !== 'undefined' ? AuthService.getToken?.() : null;
+  if (!token) {
+    const saved = sessionStorage.getItem('wiki_auth');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.expiry > Date.now()) token = parsed.token;
+      } catch {}
+    }
+  }
+  return token || null;
+};
+
+// Build the X-Provider-* headers for a provider config object.
+// Handles plain-text keys and encrypted keys (apiKeyEncrypted = true).
+async function buildProviderHeaders(provider, encryptionKey) {
+  const headers = {
+    'X-Provider-Type': provider.type || '',
+    'X-Provider-Key':  provider.apiKey || '',
+  };
+  if (provider.url) headers['X-Provider-URL'] = provider.url;
+  if (provider.apiKeyEncrypted && encryptionKey) {
+    headers['X-Provider-Encrypted'] = 'true';
+    headers['X-Provider-Enc-Key']   = encryptionKey;
+  }
+  return headers;
+}
+
+// Test a provider config by sending a minimal chat completion.
+// provider: { type, apiKey, apiKeyEncrypted, url, model }
+// Returns { ok: true } or { ok: false, error: string }
+window.testAiProvider = async function(provider, encryptionKey = null) {
+  const config = typeof CONFIG !== 'undefined' ? CONFIG : window.CONFIG;
+  const aiUrl = config?.AI_URL;
+  if (!aiUrl) throw new Error('AI_URL not configured');
+
+  const token = await window.getAiAuthToken();
+  if (!token) throw new Error('Not authenticated');
+
+  const providerHeaders = await buildProviderHeaders(provider, encryptionKey);
+  const res = await fetch(`${aiUrl}/api/provider-test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...providerHeaders },
+    body: JSON.stringify({ model: provider.model || '' }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    return { ok: false, error: err.error || `HTTP ${res.status}` };
+  }
+  return res.json();
+};
+
+// Discover available models for a provider config.
+// provider: { type, apiKey, apiKeyEncrypted, url }
+// Returns { models: string[] } or { error: string }
+window.discoverProviderModels = async function(provider, encryptionKey = null) {
+  const config = typeof CONFIG !== 'undefined' ? CONFIG : window.CONFIG;
+  const aiUrl = config?.AI_URL;
+  if (!aiUrl) throw new Error('AI_URL not configured');
+
+  const token = await window.getAiAuthToken();
+  if (!token) throw new Error('Not authenticated');
+
+  const providerHeaders = await buildProviderHeaders(provider, encryptionKey);
+  const res = await fetch(`${aiUrl}/api/provider-models`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...providerHeaders },
+    body: '{}',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    return { error: err.error || `HTTP ${res.status}` };
+  }
+  return res.json();
+};
+
 window.fetchAiModels = async function() {
   const config = typeof CONFIG !== 'undefined' ? CONFIG : window.CONFIG;
   const aiUrl = config?.AI_URL;

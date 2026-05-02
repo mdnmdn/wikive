@@ -974,3 +974,73 @@ button { cursor: pointer; }
   gap: 4px;
   line-height: 1.4;
 }
+
+.ai-settings-section {
+  padding: 0.65rem 0.75rem 0.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.ai-settings-section-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: hsl(var(--muted-foreground));
+  padding: 0.5rem 0.75rem 0.3rem;
+}
+
+.ai-settings-section-desc {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  margin: 0 0 0.5rem;
+  line-height: 1.4;
+}
+
+.ai-settings-action-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ai-settings-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 5px;
+  border: 1px solid hsl(var(--border));
+  background-color: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.ai-settings-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ai-settings-action-btn:hover:not(:disabled) {
+  opacity: 0.8;
+}
+
+.ai-action-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-action-status--ok {
+  color: hsl(142 71% 35%);
+}
+
+.ai-action-status--error {
+  color: hsl(var(--destructive));
+}

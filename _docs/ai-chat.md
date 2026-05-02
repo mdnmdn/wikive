@@ -45,17 +45,16 @@ fryHashbrown({ model: 'gemini:…' })      POST /api/chat
 
 | File | Role |
 |------|------|
-| `src/js/services/ai-chat.js` | `createAiChat()` — wraps `fryHashbrown`, attaches auth + optional provider middlewares, exposes `updateModel` |
-| `src/js/services/ai-tools.js` | `getWikiTools()` — seven tools the LLM can call: `getCurrentDocument`, `getCurrentContent`, `updateCurrentDocument`, `readPage`, `writePage`, `listPages`, `deletePage` |
-| `src/js/services/ai-prompt.js` | `WIKI_ASSISTANT_SYSTEM` — system prompt constant, injects the wiki root folder name and documents context-aware tools |
+| `src/js/services/ai-chat.js` | `createAiChat()`, `testAiProvider()`, `discoverProviderModels()`, `getAiAuthToken()` |
+| `src/js/services/ai-tools.js` | `getWikiTools()` — seven tools: `getCurrentDocument`, `getCurrentContent`, `updateCurrentDocument`, `readPage`, `writePage`, `listPages`, `deletePage` |
+| `src/js/services/ai-prompt.js` | `WIKI_ASSISTANT_SYSTEM` — base system prompt; custom per-wiki instructions are appended in `app.js` |
 | `src/js/components/AiChatPanel.js` | Vue component — fixed slide-in panel, document context chip, model selector, gear toggle to open settings, message list with context notes, tool-call badges, input bar |
-| `src/js/components/AiSettingsPanel.js` | Vue component — embedded settings view for managing AI provider configurations (add / edit / delete) |
-| `src/js/app.js` | Mounts `AiChatPanel`, owns `aiChat`/`aiPanelOpen`/`aiModel`/`aiProviders`/`documentContext` state, maintains `window._currentDocContext`, lazy-initialises the chat instance, persists providers to Drive |
+| `src/js/components/AiSettingsPanel.js` | Vue component — wiki custom prompt editor, provider list with add/edit/delete, test-connection and discover-models buttons per provider |
+| `src/js/app.js` | Mounts `AiChatPanel`; owns `aiChat`/`aiPanelOpen`/`aiModel`/`aiProviders`/`documentContext`/`currentWikiCustomPrompt` state; handles custom prompt persistence and chat recreation |
 | `src/js/components/AppHeader.js` | Renders the AI toggle button when `aiEnabled` is true, emits `toggle-ai-chat` |
-| `src/js/providers/GoogleDriveProvider.js` | Persists `wiki_definitions.json` in `{ wikis, aiProviders }` format; back-compat with old plain-array format |
+| `src/js/providers/GoogleDriveProvider.js` | Persists `wiki_definitions.json` in `{ wikis, aiProviders }` format; each wiki object may carry `aiCustomPrompt` |
 | `src/config.js` | `AI_URL` (required to enable AI), `AI_MODEL` (default model when no providers configured) |
-| `worker/src/index.js` | `handleChat()`, `routeToProvider()`, `verifyGoogleToken()`, `isEmailAuthorized()` |
-| `worker/package.json` | Adds `@hashbrownai/anthropic`, `@hashbrownai/google`, `@hashbrownai/openai` as Worker dependencies |
+| `src/index.js` | `handleChat()`, `handleProviderTest()`, `handleProviderModels()`, `routeToProvider()`, `resolveProviderFromRequest()` |
 
 ---
 
@@ -93,7 +92,7 @@ The file was extended from a plain array to an object. Back-compat parsing handl
 ```json
 {
   "wikis": [
-    { "wikiName": "default", "rootFolder": "_wiki" }
+    { "wikiName": "default", "rootFolder": "_wiki", "aiCustomPrompt": "Always reply in Italian." }
   ],
   "aiProviders": [
     { "id": "…", "name": "…", "type": "anthropic", "apiKey": "…", "url": "", "models": ["…"] }
@@ -101,8 +100,10 @@ The file was extended from a plain array to an object. Back-compat parsing handl
 }
 ```
 
+The optional `aiCustomPrompt` field on each wiki item stores per-wiki AI instructions. It is appended to the base system prompt at chat creation time under a `## Custom Instructions` heading.
+
 `GoogleDriveProvider.getWikiDefinitions()` returns `{ id, wikis, aiProviders }`.
-`GoogleDriveProvider.saveWikiDefinitions({ wikis, aiProviders })` saves the object form.
+`GoogleDriveProvider.saveWikiDefinitions({ wikis, aiProviders })` saves the object form — any extra fields (like `aiCustomPrompt`) on wiki items are preserved transparently.
 
 Old files (plain array) are read as `{ wikis: array, aiProviders: [] }` and migrated on next save.
 
@@ -171,6 +172,18 @@ The client's `fryHashbrown` instance decodes frames and updates its reactive sig
 `isAiConfigured()` returns `true` when `CONFIG.AI_URL` is set. Drives `aiEnabled` in `app.js`.
 
 `getDefaultModel()` reads `CONFIG.AI_MODEL`, defaulting to `gemini:gemini-flash-lite-latest`.
+
+### `getAiAuthToken()`
+
+Returns the current Google OAuth token from `AuthService` or `sessionStorage`. Used internally by `testAiProvider` and `discoverProviderModels` to authenticate requests without going through Hashbrown.
+
+### `testAiProvider(provider, encryptionKey)`
+
+Sends `POST /api/provider-test` with the provider's `X-Provider-*` headers and `{ model }` body (using the first model from the config). Returns `{ ok: true }` or `{ ok: false, error: "…" }`. Throws if `AI_URL` is not configured or the user is not authenticated.
+
+### `discoverProviderModels(provider, encryptionKey)`
+
+Sends `POST /api/provider-models` with the provider's `X-Provider-*` headers. Returns `{ models: string[] }` or `{ error: "…" }`. The returned model IDs are bare names (no provider prefix) suitable for the models textarea.
 
 ---
 
@@ -335,38 +348,49 @@ Embedded inside `AiChatPanel` (replaces the message area when the gear is toggle
 
 ### Props
 
+### Props
+
 | Prop | Type | Description |
 |------|------|-------------|
 | `providers` | Array | Current provider list from `app.js` |
 | `saving` | Boolean | True while the parent is persisting to Drive |
+| `encryptionKey` | String\|null | Per-user client encryption key |
+| `customPrompt` | String | The current wiki's `aiCustomPrompt` field |
 
 ### Emits
 
 | Event | Payload | Meaning |
 |-------|---------|---------|
 | `save` | providers array | A provider was added, edited, or deleted; parent should persist |
+| `save-prompt` | prompt string | User saved the wiki custom prompt |
 | `back` | — | User clicked the back arrow; parent hides the settings panel |
 
-### Internal state
+### List view layout
 
-`editing: null` — list view. `editing: { id, name, type, apiKey, url, models }` — edit/add form.
-`isNew` computed distinguishes add (id not yet in list) from edit.
+1. **Wiki Prompt** section — `<textarea>` bound to `promptDraft` (local copy of `customPrompt`). **Save prompt** button is enabled only when `promptDraft !== customPrompt`. Emits `save-prompt` on click.
+2. **AI Providers** section — provider cards with edit/delete buttons, same as before.
 
-### Form fields
+### Provider edit/add form
 
 | Field | Input type | Notes |
 |-------|-----------|-------|
 | Name | text | Required |
 | Type | select | `openai` / `anthropic` / `gemini` |
-| API Key | password | `autocomplete="off"` |
+| API Key | password | `autocomplete="off"`; leave empty to keep existing encrypted key |
 | Base URL | text | Optional; empty string means use provider default |
+| **Discover models** button | — | Calls `discoverProviderModels`, populates the models textarea; disabled if no API key available or `AI_URL` not set |
 | Models | textarea | One model name per line; split on `\n`, trimmed, empty lines removed |
+| **Test connection** button | — | Calls `testAiProvider` with the first model; shows ✓ Connected or ✗ error |
 
 On **Save**, the component splices the provider into its local copy of the list and emits `save`
 with the full updated array. The parent (`app.js`) then persists to Drive and rebuilds
 `window.AI_MODELS`.
 
 On **Delete**, confirmation is requested via `confirm()` before the provider is removed and `save` is emitted.
+
+### `canTestOrDiscover` computed
+
+Returns `true` when `CONFIG.AI_URL` is set, a provider type is selected, and an API key is available (either freshly entered in the form or from an existing encrypted provider).
 
 ---
 
@@ -387,6 +411,8 @@ On **Delete**, confirmation is requested via `confirm()` before the provider is 
 `aiEnabled` — `true` when `isAiConfigured()` is truthy (`CONFIG.AI_URL` is set).
 
 `documentContext` — returns `{ name, path, docType }` when the currently loaded document is a `markdown` or `snippet` type; `null` otherwise. Passed as `:document-context` to `<ai-chat-panel>`.
+
+`currentWikiCustomPrompt` — reads `aiCustomPrompt` from the current wiki item in `wikiList` (matched by `currentWikiName`). Returns `''` when no wiki is selected (static-config mode). Passed as `:custom-prompt` to `<ai-chat-panel>`.
 
 ### Lifecycle
 
@@ -423,23 +449,72 @@ Saves model to `localStorage`. If the chat is already open, destroys the current
 2. Rebuilds `window.AI_MODELS` from the new list (if non-empty).
 3. Sets `providersSaving = true`, calls `StorageService.saveWikiDefinitions({ wikis, aiProviders })`, clears flag.
 
+### `onCustomPromptChange(prompt)`
+
+1. Finds the current wiki by `currentWikiName` in `wikiList`.
+2. Sets (or clears, if empty) `aiCustomPrompt` on the wiki item.
+3. Calls `StorageService.saveWikiDefinitions` to persist.
+4. If the AI chat is currently open, destroys the instance and calls `openAiPanel()` to recreate it with the updated system prompt — so changes take effect immediately without requiring a manual chat restart.
+
+### `openAiPanel` — system prompt construction
+
+```javascript
+const baseSystem = window.WIKI_ASSISTANT_SYSTEM;
+const customPrompt = this.currentWikiCustomPrompt;
+const system = customPrompt
+  ? `${baseSystem}\n\n## Custom Instructions\n\n${customPrompt}`
+  : baseSystem;
+```
+
 ### `saveWikiDefinitions` call sites
 
-All three wiki mutation methods (`createWikiAndConnect`, `createWikiFromHeader`, `deleteWiki`) pass
-`{ wikis: updated, aiProviders: this.aiProviders }` to preserve provider settings across wiki operations.
+All wiki mutation methods (`createWikiAndConnect`, `createWikiFromHeader`, `deleteWiki`, `onCustomPromptChange`) pass `{ wikis: updated, aiProviders: this.aiProviders }` to preserve all settings across wiki operations.
 
 ---
 
-## Cloudflare Worker — `worker/src/index.js`
+## Cloudflare Worker — `src/index.js`
 
-### Request flow
+### Endpoints
+
+| Method | Path | Handler | Auth |
+|--------|------|---------|------|
+| `GET` | `/api/models` | `handleModels` | None |
+| `POST` | `/api/chat` | `handleChat` | Google token + email allowlist |
+| `POST` | `/api/encrypt` | `handleEncrypt` | Google token + email allowlist |
+| `POST` | `/api/provider-test` | `handleProviderTest` | Google token + email allowlist |
+| `POST` | `/api/provider-models` | `handleProviderModels` | Google token + email allowlist |
+
+### `/api/provider-test`
+
+Validates that a provider config can complete a real request. Calls the provider's native completion API directly (not through Hashbrown) with `max_tokens: 5`. Provider credentials come from the `X-Provider-*` headers, resolved via `resolveProviderFromRequest()`. Returns `{ ok: true }` or `{ ok: false, error: "…" }`.
+
+The client passes the first model from the editing form as `{ model }` in the POST body. Supported providers: OpenAI-compatible, Anthropic, Gemini.
+
+### `/api/provider-models`
+
+Fetches the live model list from the provider's catalogue API:
+
+| Provider type | Upstream API | Filter |
+|---------------|-------------|--------|
+| `openai` | `GET /v1/models` | IDs starting with `gpt-`, `o1`, `o3`, `o4`, `chatgpt-` |
+| `anthropic` | `GET /v1/models?limit=100` | All returned model IDs |
+| `gemini` | `GET /v1beta/models?pageSize=100` | Models that support `generateContent` and start with `gemini` |
+
+Returns `{ models: ["id1", "id2", …] }` (bare model IDs, no provider prefix) or `{ error: "…" }`.
+
+### `resolveProviderFromRequest(request, env)`
+
+Shared helper used by `/api/chat`, `/api/provider-test`, and `/api/provider-models`. Reads `X-Provider-Type`, `X-Provider-Key`, `X-Provider-URL`, `X-Provider-Encrypted`, `X-Provider-Enc-Key` from request headers. Decrypts the key if encrypted. Returns `{ providerOverride: { type, apiKey, url } }` or `{ error: Response }`.
+
+### Chat request flow
 
 1. **Auth** — validates `Authorization: Bearer <token>` via `verifyGoogleToken()` (Google tokeninfo). Checks `aud` matches `GOOGLE_CLIENT_ID` and scope includes `drive`.
 2. **Email fallback** — fetches `/oauth2/v2/userinfo` if `tokeninfo` lacks an `email` claim.
 3. **Allowlist** — `isEmailAuthorized(email, env.AUTHORIZED_EMAILS)`. Denies all if secret unset.
-4. **Parse body** — reads `Chat.Api.CompletionCreateParams` JSON.
-5. **Route** — `routeToProvider(body, env)` detects provider from model string (or from `X-Provider-*` headers when present).
-6. **Stream** — wraps provider async iterator in a `ReadableStream`, responds `Content-Type: application/octet-stream`.
+4. **Resolve provider** — calls `resolveProviderFromRequest` if `X-Provider-Type` + `X-Provider-Key` are present.
+5. **Parse body** — reads `Chat.Api.CompletionCreateParams` JSON.
+6. **Route** — `routeToProvider(body, env, providerOverride)` detects provider from model string or override.
+7. **Stream** — wraps provider async iterator in a `ReadableStream`, responds `Content-Type: application/octet-stream`.
 
 ### Model routing — `routeToProvider`
 
@@ -449,8 +524,7 @@ All three wiki mutation methods (`createWikiAndConnect`, `createWikiFromHeader`,
 | `claude:*` or `claude-*` | `HashbrownAnthropic.stream.text()` | `ANTHROPIC_API_KEY` |
 | `gpt:*`, `o1:*`, `o3:*`, `o4:*`, `chatgpt:*` or bare | `HashbrownOpenAI.stream.text()` | `OPENAI_API_KEY` |
 
-When `X-Provider-Type` / `X-Provider-Key` headers are present the worker can use them to override
-the provider and key instead of its own secrets.
+When `providerOverride` is set (from `resolveProviderFromRequest`) it takes precedence over model-string routing.
 
 ### Worker secrets
 
@@ -524,3 +598,8 @@ All colours use `hsl(var(--*))` tokens; dark mode is handled automatically.
 | LLM error | Error bar with Retry (`resendMessages()`) |
 | User closes panel | `aiPanelOpen = false`; Hashbrown instance stays alive, history preserved |
 | App unmounts | `aiChat.destroy()` stops the effect loop |
+| Custom prompt saved | `onCustomPromptChange` updates the wiki item, persists to Drive, then recreates the chat so the new instructions are active immediately |
+| Wiki with no `currentWikiName` (static config) | `currentWikiCustomPrompt` returns `''`; prompt cannot be saved (no wiki item to write to) |
+| "Test connection" clicked in provider form | `testAiProvider` → `POST /api/provider-test` → badge shows ✓ Connected or ✗ error with message |
+| "Discover models" clicked in provider form | `discoverProviderModels` → `POST /api/provider-models` → models textarea populated; badge shows ✓ Updated or ✗ error |
+| Provider has no API key and no encrypted key | "Test connection" and "Discover models" buttons are disabled (`canTestOrDiscover = false`) |

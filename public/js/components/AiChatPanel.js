@@ -10,9 +10,10 @@ const AiChatPanel = {
     aiProviders: { type: Array, default: () => [] },
     providersSaving: { type: Boolean, default: false },
     encryptionKey: { type: String, default: null },
+    customPrompt: { type: String, default: '' },
   },
 
-  emits: ['close', 'page-refresh', 'model-change', 'providers-change'],
+  emits: ['close', 'page-refresh', 'model-change', 'providers-change', 'prompt-change'],
 
   data() {
     return {
@@ -144,6 +145,10 @@ const AiChatPanel = {
       this.$emit('providers-change', providers);
     },
 
+    onPromptSave(prompt) {
+      this.$emit('prompt-change', prompt);
+    },
+
     _contextKey(ctx) {
       return ctx ? `${ctx.docType}:${ctx.path}` : null;
     },
@@ -201,7 +206,9 @@ const AiChatPanel = {
         :providers="aiProviders"
         :saving="providersSaving"
         :encryption-key="encryptionKey"
+        :custom-prompt="customPrompt"
         @save="onProvidersSave"
+        @save-prompt="onPromptSave"
         @back="showSettings = false"
       ></ai-settings-panel>
 

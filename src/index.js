@@ -45,6 +45,16 @@ export default {
       return handleEncrypt(request, env);
     }
 
+    // Provider connectivity test
+    if (url.pathname === '/api/provider-test' && request.method === 'POST') {
+      return handleProviderTest(request, env);
+    }
+
+    // Provider model discovery
+    if (url.pathname === '/api/provider-models' && request.method === 'POST') {
+      return handleProviderModels(request, env);
+    }
+
     // Public share proxy for anonymously shared Drive files.
     // Avoids browser-side CORS/XHR restrictions on drive.usercontent.google.com.
     if (url.pathname === '/share-file') {
@@ -274,29 +284,15 @@ async function handleChat(request, env) {
   const auth = await authenticateRequest(request, env);
   if (auth.error) return auth.error;
 
-  // Extract custom provider headers
+  // Resolve provider from X-Provider-* headers (null if no override)
   const providerType = request.headers.get('X-Provider-Type') || '';
   const providerKey  = request.headers.get('X-Provider-Key')  || '';
-  const providerUrl  = request.headers.get('X-Provider-URL')  || '';
-  const isEncrypted  = request.headers.get('X-Provider-Encrypted') === 'true';
-  const encClientKey = request.headers.get('X-Provider-Enc-Key') || '';
-
-  let resolvedApiKey = providerKey;
-  if (isEncrypted && providerKey && encClientKey) {
-    if (!env.ENCRYPTION_SECRET) {
-      return json({ error: 'Server-side encryption not configured' }, 503);
-    }
-    try {
-      const aesKey = await deriveKey(env.ENCRYPTION_SECRET, encClientKey);
-      resolvedApiKey = await decryptText(aesKey, providerKey);
-    } catch {
-      return json({ error: 'Failed to decrypt API key — key may be invalid or corrupted' }, 400);
-    }
+  let providerOverride = null;
+  if (providerType && providerKey) {
+    const resolved = await resolveProviderFromRequest(request, env);
+    if (resolved.error) return resolved.error;
+    providerOverride = resolved.providerOverride;
   }
-
-  const providerOverride = (providerType && resolvedApiKey)
-    ? { type: providerType, apiKey: resolvedApiKey, url: providerUrl }
-    : null;
 
   // Parse request body (Chat.Api.CompletionCreateParams)
   let body;
@@ -385,6 +381,161 @@ function routeToProvider(body, env, override = null) {
   }
 
   throw new Error(`Unknown model prefix: "${fullModel}". Use gemini:*, claude:*, or gpt:* / o1:* / o3:* / o4:*.`);
+}
+
+// ── Provider test ────────────────────────────────────────────────────────────
+
+async function handleProviderTest(request, env) {
+  const auth = await authenticateRequest(request, env);
+  if (auth.error) return auth.error;
+
+  const { providerOverride, error: resolveError } = await resolveProviderFromRequest(request, env);
+  if (resolveError) return resolveError;
+
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400); }
+
+  const model = (body.model || '').trim();
+  if (!model) return json({ error: 'model is required' }, 400);
+
+  try {
+    const { type, apiKey, url: baseUrl } = providerOverride;
+    let res;
+
+    if (type === 'anthropic') {
+      res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: 'Reply with just "OK".' }],
+          max_tokens: 5,
+        }),
+      });
+    } else if (type === 'gemini') {
+      const modelId = model.replace(/^gemini[:/]/, '');
+      const endpoint = (baseUrl || 'https://generativelanguage.googleapis.com') +
+        `/v1beta/models/${modelId}:generateContent?key=${apiKey}`;
+      res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: 'Reply with just "OK".' }] }],
+          generationConfig: { maxOutputTokens: 5 },
+        }),
+      });
+    } else {
+      // openai-compatible
+      const base = (baseUrl || 'https://api.openai.com').replace(/\/$/, '');
+      res = await fetch(`${base}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: 'Reply with just "OK".' }],
+          max_tokens: 5,
+        }),
+      });
+    }
+
+    if (res.ok) return json({ ok: true });
+    const errBody = await res.text().catch(() => '');
+    let errMsg;
+    try { errMsg = JSON.parse(errBody)?.error?.message || errBody; } catch { errMsg = errBody; }
+    return json({ ok: false, error: `Provider returned ${res.status}: ${errMsg}` });
+  } catch (e) {
+    return json({ ok: false, error: e.message });
+  }
+}
+
+// ── Provider model discovery ──────────────────────────────────────────────────
+
+async function handleProviderModels(request, env) {
+  const auth = await authenticateRequest(request, env);
+  if (auth.error) return auth.error;
+
+  const { providerOverride, error: resolveError } = await resolveProviderFromRequest(request, env);
+  if (resolveError) return resolveError;
+
+  const { type, apiKey, url: baseUrl } = providerOverride;
+
+  try {
+    if (type === 'anthropic') {
+      const res = await fetch('https://api.anthropic.com/v1/models?limit=100', {
+        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      });
+      if (!res.ok) return json({ error: `Anthropic returned ${res.status}` });
+      const data = await res.json();
+      const models = (data.data || []).map(m => m.id).sort();
+      return json({ models });
+    }
+
+    if (type === 'gemini') {
+      const endpoint = (baseUrl || 'https://generativelanguage.googleapis.com') +
+        `/v1beta/models?key=${apiKey}&pageSize=100`;
+      const res = await fetch(endpoint);
+      if (!res.ok) return json({ error: `Gemini returned ${res.status}` });
+      const data = await res.json();
+      const models = (data.models || [])
+        .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+        .map(m => m.name.replace(/^models\//, ''))
+        .filter(m => m.startsWith('gemini'))
+        .sort();
+      return json({ models });
+    }
+
+    // openai-compatible
+    const base = (baseUrl || 'https://api.openai.com').replace(/\/$/, '');
+    const res = await fetch(`${base}/v1/models`, {
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+    });
+    if (!res.ok) return json({ error: `Provider returned ${res.status}` });
+    const data = await res.json();
+    const CHAT_PREFIXES = ['gpt-', 'o1', 'o3', 'o4', 'chatgpt-'];
+    const models = (data.data || [])
+      .map(m => m.id)
+      .filter(id => CHAT_PREFIXES.some(p => id.startsWith(p)))
+      .sort();
+    return json({ models: models.length ? models : (data.data || []).map(m => m.id).sort() });
+  } catch (e) {
+    return json({ error: e.message });
+  }
+}
+
+// ── Shared provider resolution ────────────────────────────────────────────────
+
+async function resolveProviderFromRequest(request, env) {
+  const providerType = request.headers.get('X-Provider-Type') || '';
+  const providerKey  = request.headers.get('X-Provider-Key')  || '';
+  const providerUrl  = request.headers.get('X-Provider-URL')  || '';
+  const isEncrypted  = request.headers.get('X-Provider-Encrypted') === 'true';
+  const encClientKey = request.headers.get('X-Provider-Enc-Key') || '';
+
+  if (!providerType || !providerKey) {
+    return { error: json({ error: 'X-Provider-Type and X-Provider-Key headers are required' }, 400) };
+  }
+
+  let resolvedApiKey = providerKey;
+  if (isEncrypted && providerKey && encClientKey) {
+    if (!env.ENCRYPTION_SECRET) {
+      return { error: json({ error: 'Server-side encryption not configured' }, 503) };
+    }
+    try {
+      const aesKey = await deriveKey(env.ENCRYPTION_SECRET, encClientKey);
+      resolvedApiKey = await decryptText(aesKey, providerKey);
+    } catch {
+      return { error: json({ error: 'Failed to decrypt API key' }, 400) };
+    }
+  }
+
+  return { providerOverride: { type: providerType, apiKey: resolvedApiKey, url: providerUrl } };
 }
 
 // ── Email authorization ─────────────────────────────────────────────────────
