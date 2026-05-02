@@ -160,6 +160,7 @@ const app = Vue.createApp({
         :chat="aiChat"
         :model="aiModel"
         :page-context="currentPath"
+        :document-context="documentContext"
         :ai-providers="aiProviders"
         :providers-saving="providersSaving"
         :encryption-key="encryptionKey"
@@ -405,6 +406,11 @@ const app = Vue.createApp({
   computed: {
     aiEnabled() {
       return typeof isAiConfigured === 'function' && isAiConfigured();
+    },
+    documentContext() {
+      const doc = this.document;
+      if (!doc || !['markdown', 'snippet'].includes(doc.docType)) return null;
+      return { name: doc.name, path: this.currentPath, docType: doc.docType };
     },
     renameMoveTitle() {
       const dt = this.document?.docType;
@@ -734,6 +740,7 @@ const app = Vue.createApp({
         this.showToast('Error loading: ' + e.message, 'error');
       }
 
+      this._setupDocContext();
       this.loading = false;
     },
 
@@ -842,6 +849,7 @@ const app = Vue.createApp({
           if (typeof RealtimeService !== 'undefined') RealtimeService.notifyUpdate('save', this.currentPath, this.document.docType);
         }
         this.fileContent = content;
+        if (window._currentDocContext) window._currentDocContext.content = content;
         this.mode = 'view';
       } catch (e) {
         this.showToast('Failed to save: ' + e.message, 'error');
@@ -1242,6 +1250,22 @@ const app = Vue.createApp({
     showToast(message, type = 'info') {
       this.toast = { message, type };
       setTimeout(() => { this.toast = null; }, 3000);
+    },
+
+    _setupDocContext() {
+      const doc = this.document;
+      const supported = doc && (doc.docType === 'markdown' || doc.docType === 'snippet');
+      window._currentDocContext = supported ? {
+        name: doc.name,
+        path: this.currentPath,
+        docType: doc.docType,
+        documentId: doc.id,
+        content: this.fileContent,
+      } : null;
+      window._refreshCurrentDoc = () => {
+        if (this.document?.id) CacheService.remove('content:' + this.document.id);
+        this.onRouteChange();
+      };
     },
 
     async openAiPanel() {

@@ -5,8 +5,59 @@ window.getWikiTools = async function() {
 
   return [
     {
+      name: 'getCurrentDocument',
+      description: 'Get information about the document currently open in the wiki (name, path, type). Returns null if no supported document is open.',
+      label: () => 'Getting current document info',
+      schema: s.object('getCurrentDocument input', {}),
+      async handler(_args, _signal) {
+        const ctx = window._currentDocContext;
+        if (!ctx) return { document: null, message: 'No document is currently open.' };
+        return {
+          document: {
+            name: ctx.name,
+            path: ctx.path,
+            docType: ctx.docType,
+          },
+        };
+      },
+    },
+    {
+      name: 'getCurrentContent',
+      description: 'Get the full content of the document currently open in the wiki. Works for markdown pages and snippets.',
+      label: () => 'Reading current document',
+      schema: s.object('getCurrentContent input', {}),
+      async handler(_args, _signal) {
+        const ctx = window._currentDocContext;
+        if (!ctx) throw new Error('No document is currently open.');
+        if (!['markdown', 'snippet'].includes(ctx.docType)) {
+          throw new Error(`Cannot read content of document type: ${ctx.docType}`);
+        }
+        return { content: ctx.content, name: ctx.name, path: ctx.path, docType: ctx.docType };
+      },
+    },
+    {
+      name: 'updateCurrentDocument',
+      description: 'Update and save the content of the document currently open in the wiki. Works for markdown pages and snippets.',
+      label: () => 'Updating current document',
+      schema: s.object('updateCurrentDocument input', {
+        content: s.string('The new full content to write to the document.'),
+      }),
+      async handler({ content }, _signal) {
+        const ctx = window._currentDocContext;
+        if (!ctx) throw new Error('No document is currently open.');
+        if (!['markdown', 'snippet'].includes(ctx.docType)) {
+          throw new Error(`Cannot update document type: ${ctx.docType}`);
+        }
+        if (!ctx.documentId) throw new Error('Document has no ID (unsaved document).');
+        await StorageService.updateFile(ctx.documentId, content);
+        window._currentDocContext = { ...ctx, content };
+        window._refreshCurrentDoc?.();
+        return { status: 'updated', name: ctx.name, path: ctx.path };
+      },
+    },
+    {
       name: 'readPage',
-      description: 'Read the markdown content of a wiki page. Pass the path as argument.',
+      description: 'Read the markdown content of a wiki page by path.',
       label: (args) => `Reading "${args?.path ?? ''}"`,
       schema: s.object('readPage input', {
         path: s.string('Page path relative to wiki root, without the .md extension. Examples: "home", "notes/meeting".'),

@@ -733,6 +733,59 @@ button { cursor: pointer; }
   opacity: 0.85;
 }
 
+/* ── AI Document Context ───────────────────────────────────────────────── */
+.ai-doc-context-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.72rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background-color: hsl(var(--muted) / 0.5);
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.ai-doc-context-type {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.65rem;
+  background-color: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+  padding: 0.1em 0.4em;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.ai-doc-context-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-context-note {
+  font-size: 0.78rem;
+  color: hsl(var(--muted-foreground));
+  background-color: hsl(var(--muted) / 0.4);
+  border-left: 2px solid hsl(var(--primary) / 0.4);
+  padding: 0.35rem 0.6rem;
+  border-radius: 0 4px 4px 0;
+  margin: 0.25rem 0;
+  line-height: 1.4;
+}
+
+.ai-context-note p {
+  margin: 0;
+}
+
+.ai-context-note code {
+  font-size: 0.75rem;
+  background-color: hsl(var(--muted));
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+
 /* ── AI Settings Panel ─────────────────────────────────────────────────── */
 .ai-settings-panel {
   display: flex;
