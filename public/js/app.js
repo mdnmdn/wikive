@@ -736,10 +736,20 @@ const app = Vue.createApp({
           this.document = doc;
           this.fileContent = JSON.stringify({
             cells: [],
-            metadata: {},
+            metadata: {
+              kernelspec: {
+                display_name: 'Python (Pyodide)',
+                language: 'python',
+                name: 'python'
+              },
+              language_info: {
+                name: 'python',
+                version: '3.11.0'
+              }
+            },
             nbformat: 4,
             nbformat_minor: 5
-          });
+          }, null, 2);
           this.mode = 'edit';
         }
       } catch (e) {
@@ -796,7 +806,19 @@ const app = Vue.createApp({
         } else if (specialFolder === 'notebooks') {
           const meta = await StorageService.getFileMetadata(itemId);
           this.document = DocumentService.toDocument(meta, folderId, this.currentPath);
-          this.fileContent = await StorageService.getFileContent(itemId);
+          try {
+            this.fileContent = await StorageService.getFileContent(itemId);
+          } catch (e) {
+            this.fileContent = JSON.stringify({
+              cells: [],
+              metadata: {
+                kernelspec: { display_name: 'Python (Pyodide)', language: 'python', name: 'python' },
+                language_info: { name: 'python', version: '3.11.0' }
+              },
+              nbformat: 4,
+              nbformat_minor: 5
+            }, null, 2);
+          }
       } else {
         // Asset subfolder navigation is handled by the AssetViewer
         this.document = DocumentService.toDocument(
@@ -871,6 +893,7 @@ const app = Vue.createApp({
     },
 
     async onRendererSave(data) {
+      const silent = data?.silent || false;
       // Renderer handled its own save (snippets, drawings)
       // Clear parent listing cache so new items appear in the sidebar
       if (this.document?.parentId) {
@@ -890,11 +913,15 @@ const app = Vue.createApp({
       }
       if (typeof RealtimeService !== 'undefined') RealtimeService.notifyUpdate('save', this.currentPath, this.document?.docType);
       this.refreshSidebar();
+      if (!silent) this.showToast('Saved', 'success');
       // Drawings stay in edit mode — don't reload the route (would remount Excalidraw).
       // Just patch the document name in place if it changed.
-      if (this.document?.docType === 'drawing') {
+      if (this.document?.docType === 'drawing' || this.document?.docType === 'notebook') {
         if (data?.name && this.document.name !== data.name) {
           this.document = { ...this.document, name: data.name };
+        }
+        if (data?.content) {
+          this.fileContent = data.content;
         }
         return;
       }
