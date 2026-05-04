@@ -600,21 +600,21 @@ button { cursor: pointer; }
 }
 
 .ai-tool-badge--running {
-  background: hsl(45 90% 96%);
-  border-color: hsl(45 80% 80%);
-  color: hsl(35 70% 35%);
+  background: hsl(210 60% 96%);
+  border-color: hsl(210 80% 80%);
+  color: hsl(210 60% 40%);
 }
 
 .ai-tool-badge--done {
-  background: hsl(140 60% 96%);
-  border-color: hsl(140 50% 75%);
-  color: hsl(140 50% 30%);
+  background: hsl(210 60% 96%);
+  border-color: hsl(210 80% 80%);
+  color: hsl(210 60% 40%);
 }
 
 .ai-tool-badge--error {
   background: hsl(0 80% 97%);
   border-color: hsl(0 70% 80%);
-  color: hsl(0 60% 40%);
+  color: hsl(0 60% 45%);
 }
 
 .ai-tool-icon {
@@ -628,6 +628,54 @@ button { cursor: pointer; }
 .ai-tool-error {
   opacity: 0.7;
   font-size: 0.7rem;
+}
+
+/* Tool call summary block - shown after tool calls complete */
+.ai-tool-summary {
+  margin: 0.75rem 0;
+  border-radius: 8px;
+  border: 1px solid hsl(210 80% 80%);
+  background: hsl(210 60% 98%);
+  overflow: hidden;
+}
+
+.ai-tool-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: hsl(210 60% 40%);
+  background: hsl(210 60% 92%);
+  border-bottom: 1px solid hsl(210 80% 80%);
+}
+
+.ai-tool-summary-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-tool-summary-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  border-bottom: 1px solid hsl(210 80% 85%);
+}
+
+.ai-tool-summary-item:last-child {
+  border-bottom: none;
+}
+
+.ai-tool-summary-item--done {
+  color: hsl(150 50% 35%);
+}
+
+.ai-tool-summary-item--error {
+  color: hsl(0 60% 45%);
+  background: hsl(0 80% 97%);
 }
 
 /* Typing indicator */
@@ -734,6 +782,59 @@ button { cursor: pointer; }
 
 .ai-panel-send:hover:not(:disabled) {
   opacity: 0.85;
+}
+
+/* ── AI Document Context ───────────────────────────────────────────────── */
+.ai-doc-context-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.72rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background-color: hsl(var(--muted) / 0.5);
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.ai-doc-context-type {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.65rem;
+  background-color: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+  padding: 0.1em 0.4em;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.ai-doc-context-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-context-note {
+  font-size: 0.78rem;
+  color: hsl(var(--muted-foreground));
+  background-color: hsl(var(--muted) / 0.4);
+  border-left: 2px solid hsl(var(--primary) / 0.4);
+  padding: 0.35rem 0.6rem;
+  border-radius: 0 4px 4px 0;
+  margin: 0.25rem 0;
+  line-height: 1.4;
+}
+
+.ai-context-note p {
+  margin: 0;
+}
+
+.ai-context-note code {
+  font-size: 0.75rem;
+  background-color: hsl(var(--muted));
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
 }
 
 /* ── AI Settings Panel ─────────────────────────────────────────────────── */
@@ -923,4 +1024,74 @@ button { cursor: pointer; }
   align-items: flex-start;
   gap: 4px;
   line-height: 1.4;
+}
+
+.ai-settings-section {
+  padding: 0.65rem 0.75rem 0.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.ai-settings-section-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: hsl(var(--muted-foreground));
+  padding: 0.5rem 0.75rem 0.3rem;
+}
+
+.ai-settings-section-desc {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  margin: 0 0 0.5rem;
+  line-height: 1.4;
+}
+
+.ai-settings-action-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ai-settings-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 5px;
+  border: 1px solid hsl(var(--border));
+  background-color: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.ai-settings-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ai-settings-action-btn:hover:not(:disabled) {
+  opacity: 0.8;
+}
+
+.ai-action-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-action-status--ok {
+  color: hsl(142 71% 35%);
+}
+
+.ai-action-status--error {
+  color: hsl(var(--destructive));
 }

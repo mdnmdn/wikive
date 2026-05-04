@@ -160,12 +160,15 @@ const app = Vue.createApp({
         :chat="aiChat"
         :model="aiModel"
         :page-context="currentPath"
+        :document-context="documentContext"
         :ai-providers="aiProviders"
         :providers-saving="providersSaving"
         :encryption-key="encryptionKey"
+        :custom-prompt="currentWikiCustomPrompt"
         @close="closeAiPanel"
         @model-change="onAiModelChange"
         @providers-change="onProvidersChange"
+        @prompt-change="onCustomPromptChange"
         @page-refresh="refreshPage"
       ></ai-chat-panel>
 
@@ -406,6 +409,15 @@ const app = Vue.createApp({
     aiEnabled() {
       return typeof isAiConfigured === 'function' && isAiConfigured();
     },
+    documentContext() {
+      const doc = this.document;
+      if (!doc || !['markdown', 'snippet'].includes(doc.docType)) return null;
+      return { name: doc.name, path: this.currentPath, docType: doc.docType };
+    },
+    currentWikiCustomPrompt() {
+      if (!this.currentWikiName) return '';
+      return this.wikiList.find(w => w.wikiName === this.currentWikiName)?.aiCustomPrompt || '';
+    },
     renameMoveTitle() {
       const dt = this.document?.docType;
       if (dt === 'drawing') return 'Rename Drawing';
@@ -496,6 +508,7 @@ const app = Vue.createApp({
 
       // Static config: ROOT_FOLDER_NAME hard-coded — skip wiki selection
       if (CONFIG.ROOT_FOLDER_NAME) {
+        this.currentWikiName = CONFIG.ROOT_FOLDER_NAME.split('/').pop();
         await this._connectToWiki(CONFIG.ROOT_FOLDER_NAME);
         return;
       }
@@ -514,6 +527,7 @@ const app = Vue.createApp({
           const found = wikis.find(w => w.wikiName === savedName);
           if (found) {
             this.wikiLoading = false;
+            this.currentWikiName = found.wikiName;
             await this._connectToWiki(found.rootFolder);
             return;
           }
@@ -751,6 +765,7 @@ const app = Vue.createApp({
         this.showToast('Error loading: ' + e.message, 'error');
       }
 
+      this._setupDocContext();
       this.loading = false;
     },
 
@@ -859,6 +874,7 @@ const app = Vue.createApp({
           if (typeof RealtimeService !== 'undefined') RealtimeService.notifyUpdate('save', this.currentPath, this.document.docType);
         }
         this.fileContent = content;
+        if (window._currentDocContext) window._currentDocContext.content = content;
         this.mode = 'view';
       } catch (e) {
         this.showToast('Failed to save: ' + e.message, 'error');
@@ -1261,6 +1277,22 @@ const app = Vue.createApp({
       setTimeout(() => { this.toast = null; }, 3000);
     },
 
+    _setupDocContext() {
+      const doc = this.document;
+      const supported = doc && (doc.docType === 'markdown' || doc.docType === 'snippet');
+      window._currentDocContext = supported ? {
+        name: doc.name,
+        path: this.currentPath,
+        docType: doc.docType,
+        documentId: doc.id,
+        content: this.fileContent,
+      } : null;
+      window._refreshCurrentDoc = () => {
+        if (this.document?.id) CacheService.remove('content:' + this.document.id);
+        this.onRouteChange();
+      };
+    },
+
     async openAiPanel() {
       this.aiPanelOpen = true;
       if (!this.aiChat) {
@@ -1292,10 +1324,15 @@ const app = Vue.createApp({
           }
 
           const tools = typeof getWikiTools === 'function' ? await getWikiTools() : [];
+          const baseSystem = window.WIKI_ASSISTANT_SYSTEM || 'You are a helpful AI assistant.';
+          const customPrompt = this.currentWikiCustomPrompt;
+          const system = customPrompt
+            ? `${baseSystem}\n\n## Custom Instructions\n\n${customPrompt}`
+            : baseSystem;
           this.aiChat = await createAiChat({
             model: modelName,
             provider,
-            system: window.WIKI_ASSISTANT_SYSTEM || 'You are a helpful AI assistant.',
+            system,
             tools,
             encryptionKey: this.encryptionKey,
           });
@@ -1375,6 +1412,30 @@ const app = Vue.createApp({
         this.showToast('Failed to save AI settings: ' + e.message, 'error');
       }
       this.providersSaving = false;
+    },
+
+    async onCustomPromptChange(prompt) {
+      const idx = this.wikiList.findIndex(w => w.wikiName === this.currentWikiName);
+      if (idx < 0) {
+        this.showToast('No active wiki — custom prompt not saved', 'error');
+        return;
+      }
+      const updated = [...this.wikiList];
+      updated[idx] = { ...updated[idx], aiCustomPrompt: prompt || undefined };
+      this.wikiList = updated;
+      try {
+        await StorageService.saveWikiDefinitions({ wikis: updated, aiProviders: this.aiProviders, encryptionKey: this.encryptionKey });
+        this.showToast('Custom prompt saved', 'success');
+      } catch (e) {
+        this.showToast('Failed to save prompt: ' + e.message, 'error');
+        return;
+      }
+      // Recreate the chat so the new prompt takes effect immediately
+      if (this.aiChat) {
+        this.aiChat.destroy?.();
+        this.aiChat = null;
+        await this.openAiPanel();
+      }
     },
 
     closeAnonymousShareDialog() {
