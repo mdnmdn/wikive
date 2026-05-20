@@ -40,6 +40,44 @@ const NotebookViewer = {
             theme: this.darkMode ? 'JupyterLab Dark' : 'JupyterLab Light'
         });
         this.jupyterUrl = `${baseUrl}?${params.toString()}`;
+    },
+    async loadNotebookContent() {
+      if (!this.content || !this.document?.name) return;
+      const frame = this.$refs.notebookFrame;
+      if (!frame?.contentWindow) return;
+
+      let parsedContent;
+      try {
+        parsedContent = typeof this.content === 'string'
+          ? JSON.parse(this.content)
+          : this.content;
+      } catch {
+        return;
+      }
+
+      // Wait for iframe to load before posting
+      if (frame.contentDocument?.readyState !== 'complete') {
+        await new Promise(r => frame.addEventListener('load', r, { once: true }));
+      }
+
+      frame.contentWindow.postMessage({
+        type: 'LOAD_NOTEBOOK',
+        payload: {
+          name: this.document.name.endsWith('.ipynb')
+            ? this.document.name
+            : this.document.name + '.ipynb',
+          content: parsedContent,
+        },
+      }, window.location.origin);
+    },
+  },
+  watch: {
+    content: {
+      handler() { this.loadNotebookContent(); },
+      immediate: true,
+    },
+    darkMode() {
+      this.updateJupyterUrl();
     }
-  }
+  },
 };

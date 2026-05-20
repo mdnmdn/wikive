@@ -43,12 +43,93 @@ const NotebookEditor = {
 
         this.jupyterUrl = `${baseUrl}?${params.toString()}`;
     },
+    async loadNotebookContent() {
+      if (!this.content || !this.document?.name) return;
+      const frame = this.$refs.notebookFrame;
+      if (!frame?.contentWindow) return;
+
+      let parsedContent;
+      try {
+        parsedContent = typeof this.content === 'string'
+          ? JSON.parse(this.content)
+          : this.content;
+      } catch {
+        this.$emit('toast', { message: 'Invalid notebook JSON', type: 'error' });
+        return;
+      }
+
+      // Wait for iframe to load before posting
+      if (frame.contentDocument?.readyState !== 'complete') {
+        await new Promise(r => frame.addEventListener('load', r, { once: true }));
+      }
+
+      frame.contentWindow.postMessage({
+        type: 'LOAD_NOTEBOOK',
+        payload: {
+          name: this.document.name.endsWith('.ipynb')
+            ? this.document.name
+            : this.document.name + '.ipynb',
+          content: parsedContent,
+        },
+      }, window.location.origin);
+    },
     getContent() {
         return this.content;
     },
     triggerSave() {
-        this.$emit('toast', { message: 'Notebooks are currently local to the JupyterLite session.', type: 'info' });
-        this.$emit('save', { name: this.document.name });
-    }
-  }
+      const frame = this.$refs.notebookFrame;
+      if (!frame?.contentWindow) return;
+
+      const notebookName = this.document.name.endsWith('.ipynb')
+        ? this.document.name
+        : this.document.name + '.ipynb';
+
+      frame.contentWindow.postMessage({
+        type: 'GET_NOTEBOOK',
+        payload: { name: notebookName },
+      }, window.location.origin);
+    },
+    setupMessageListener() {
+      this._messageHandler = (event) => {
+        if (event.origin !== window.location.origin) return;
+        const { type, payload } = event.data || {};
+
+        if (type === 'NOTEBOOK_CONTENT') {
+          this.$emit('save', {
+            name: this.document.name,
+            content: JSON.stringify(payload.content, null, 2),
+          });
+        }
+
+        if (type === 'NOTEBOOK_SAVED') {
+          this.$emit('save', {
+            name: this.document.name,
+            content: JSON.stringify(payload.content, null, 2),
+            silent: true,
+          });
+        }
+
+        if (type === 'NOTEBOOK_LOADED') {
+          // this.$emit('toast', { message: 'Notebook loaded from Drive', type: 'success' });
+        }
+      };
+      window.addEventListener('message', this._messageHandler);
+    },
+  },
+  mounted() {
+    this.setupMessageListener();
+  },
+  beforeUnmount() {
+    window.removeEventListener('message', this._messageHandler);
+  },
+  watch: {
+    content: {
+      handler(newContent, oldContent) {
+        if (newContent !== oldContent) {
+          this.loadNotebookContent();
+        }
+      },
+      immediate: true,
+    },
+  },
 };
